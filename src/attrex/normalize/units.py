@@ -30,6 +30,38 @@ def canon_text(s: str | None) -> str | None:
     return s or None
 
 
+# слова цвета, которые продавцы дописывают к модели; рус. — в форме канона (ё→е)
+COLOR_WORDS = [
+    "черный", "белый", "серый", "серебристый", "золотой", "золотистый", "синий", "голубой", "зеленый", "красный",
+    "розовый", "фиолетовый", "желтый", "оранжевый", "бежевый", "коричневый", "графитовый", "бирюзовый", "мятный",
+    "лавандовый", "темно-серый", "темно-синий", "светло-серый", "космический",
+    "black", "white", "grey", "gray", "silver", "gold", "golden", "blue", "green", "red", "pink", "purple", "violet",
+    "yellow", "orange", "beige", "brown", "graphite", "titanium", "space", "midnight", "starlight", "mint", "lavender",
+    "jetblack", "onyx", "marble", "cobalt", "icyblue", "navy",
+]
+_COLOR_RE = re.compile(r"(?<![\w-])(" + "|".join(sorted(map(re.escape, COLOR_WORDS), key=len, reverse=True))
+                       + r")(?![\w-])")
+_BRACKETS = re.compile(r"\([^)]*\)|\[[^\]]*\]")
+# начало «хвоста» с характеристиками: конфигурация памяти «12/256gb», «8/128», «1tb», или «/» в записи ноутбуков
+_SPEC_TAIL = re.compile(r"\s\d+\s*/\s*\d+\s*(gb|tb|гб|тб)?\b.*$|\s\d+\s*(gb|tb|гб|тб)\b.*$|\s*/.*$|,.*$")
+
+
+def canon_model(s: str | None) -> str | None:
+    """Название модели без артикулов в скобках, конфигурации памяти, характеристик через «/» и цвета.
+
+    «Galaxy S25 Ultra 12/256GB Titanium Gray» → «galaxy s25 ultra»,
+    «TUF Gaming F15/15.6"/Core i7/16/1TB/черный» → «tuf gaming f15», «Zenbook 14 (90NB17R1-M006H0)» → «zenbook 14».
+    """
+    s = canon_text(s)
+    if s is None:
+        return None
+    s = _BRACKETS.sub(" ", s)
+    s = _SPEC_TAIL.sub("", s)
+    s = _COLOR_RE.sub(" ", s)
+    s = re.sub(r"\s+", " ", s).strip(" -,")
+    return s or None
+
+
 def fmt_number(x: float) -> str:
     """Число строкой без лишних нулей: 256.0 → "256", 6.70 → "6.7"."""
     s = f"{x:.3f}".rstrip("0").rstrip(".")

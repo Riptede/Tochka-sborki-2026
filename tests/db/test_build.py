@@ -42,6 +42,9 @@ def test_gold_categories_and_placeholders(db):
     assert gold(con, 400000002, "color") == [("мятный", None, False)]  # фасет-заглушка → сырое значение
     assert gold(con, 400000003, "color") == [(None, None, True)]       # только заглушка
     assert gold(con, 30000001, "brand") == [("samsung", None, False)]
+    assert gold(con, 30000001, "model") == [("galaxy s25", None, False)]   # без цвета
+    assert gold(con, 400000002, "model") == [("redmi 13", None, False)]
+    assert gold(con, 400000003, "model") == [(None, None, True)]           # модель из одного цвета
 
 
 def test_cards(db):
@@ -56,6 +59,7 @@ def test_cards(db):
     assert rows[400000003][0] is True and rows[400000003][6] is None   # оффер без описания
     desc = rows[30000001][6]
     assert "<" not in desc and "Лучшие товары" not in desc and '6,2"' in desc and "\n\n\n" not in desc
+    assert rows[400000002][6] == "Цвет: мятный\nБренд «Xiaomi»"   # теги и сущности закодированы дважды
 
 
 def test_schema_inherits_and_keeps_required(db):
@@ -63,7 +67,7 @@ def test_schema_inherits_and_keeps_required(db):
     rows = con.execute("SELECT attr_id, required, inherited_from FROM core_category_schema "
                        "WHERE category_id = 761").fetchall()
     req = {a for a, r, _ in rows if r}
-    assert {"brand", "model", "storage", "screen_diag", "battery", "color"} <= req
+    assert req == {"brand", "model", "storage", "screen_diag", "battery", "color"}   # список ТЗ, не правило 70%
     assert {inh for _, _, inh in rows} == {1}   # 2 оффера < 50: схема родителя
 
 

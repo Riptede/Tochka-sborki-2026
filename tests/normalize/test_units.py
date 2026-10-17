@@ -1,6 +1,24 @@
 import pytest
 
-from attrex.normalize.units import canon_text, is_range, to_canonical_number
+from attrex.normalize.units import canon_model, canon_text, is_range, to_canonical_number
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("Galaxy S25 Ultra 5G 12/256GB Черный", "galaxy s25 ultra 5g"),
+    ("Galaxy S25 Ultra 12/256GB Titanium Gray", "galaxy s25 ultra"),
+    ('TUF Gaming F15/15.6"/Core i7-11800H/16/1TB/RTX 3050 Ti/noOS/черный', "tuf gaming f15"),
+    ("Zenbook 14 (90NB17R1-M006H0)", "zenbook 14"),
+    ("MateBook D16 MCLG-X [53013YDL]", "matebook d16 mclg-x"),
+    ("Redmi 13 green", "redmi 13"),
+    ("iPhone 17 Pro Max", "iphone 17 pro max"),
+    ("Galaxy S26+", "galaxy s26+"),
+    ("Mi Band 4/Mi Band 3 розовый", "mi band 4"),
+    ("Huawei MatePad 10.4 черный", "huawei matepad 10.4"),
+    ("Galaxy S24 8/128GB Onyx Black, хороший", "galaxy s24"),
+    (None, None),
+])
+def test_canon_model(raw, expected):
+    assert canon_model(raw) == expected
 
 
 @pytest.mark.parametrize("value, unit, target, expected", [

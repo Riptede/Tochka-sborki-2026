@@ -33,7 +33,7 @@ OFFERS = [
          {"@name": "Цвет_search", "#text": "мятный"},
          {"@name": " Встроенная память (ROM)_search", "@unit": "ТБ", "#text": "1"},
      ]},
-    {"@id": "400000003", "@available": "true", "vendor": "UNIMALL", "model": "Чехол для Honor",
+    {"@id": "400000003", "@available": "true", "vendor": "UNIMALL", "model": "Black",
      "name": "Чехол UNIMALL для Honor", "categories": {"categoryId": "900"},
      "param": {"@name": "Цвет_search", "#text": "другой"}},
 ]
@@ -44,7 +44,7 @@ FEED = {"yml_catalog": {"@date": "2026-05-13", "shop": {
 DESCRIPTIONS = [
     (30000001, "Смартфон Samsung Galaxy S25 8/256GB черный",
      "Экран <b>6,2&quot;</b><br>Батарея 4000 мА*ч<br><br><br>Лучшие товары из Китая"),
-    (400000002, "Смартфон Xiaomi Redmi 13 8/1TB", "Цвет: мятный"),
+    (400000002, "Смартфон Xiaomi Redmi 13 8/1TB", "Цвет: мятный&lt;br/&gt;Бренд &amp;laquo;Xiaomi&amp;raquo;"),
     (500000004, "Восстановленный смартфон Apple iPhone 13 128GB, хороший", "Внешний вид: «Хороший»."),
     (500000005, "Чехол для смартфона GSS -", "Характеристики:\n• Цвет: black"),
 ]

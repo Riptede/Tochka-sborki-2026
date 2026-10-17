@@ -17,17 +17,17 @@ import yaml
 
 from attrex import paths
 from attrex.db.feed import feed_cached, parse_feed
-from attrex.normalize.units import canon_text, to_canonical_number
+from attrex.normalize.units import canon_model, canon_text, to_canonical_number
 from attrex.registry import Registry, load_registry
 
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 
 # шаблонные фразы продавцов, которые не несут характеристик
 BOILERPLATE = ["Лучшие товары из Китая"]
-HTML_ENTITIES = {"&nbsp;": " ", "&quot;": '"', "&laquo;": "«", "&raquo;": "»", "&mdash;": "—", "&ndash;": "–",
-                 "&lt;": "<", "&gt;": ">", "&#39;": "'", "&amp;": "&"}
-EN_COLORS = ["black", "white", "grey", "gray", "silver", "gold", "blue", "green", "red", "pink", "purple", "violet",
-             "yellow", "orange", "beige", "brown", "graphite", "titanium", "space", "midnight"]
+# порядок важен: сначала &amp; (бывает двойное кодирование «&amp;laquo;»), потом остальные, в том числе &lt;/&gt;:
+# у части продавцов теги закодированы («&lt;br/&gt;») и удаляются только после раскодирования
+HTML_ENTITIES = {"&amp;": "&", "&nbsp;": " ", "&quot;": '"', "&laquo;": "«", "&raquo;": "»", "&mdash;": "—",
+                 "&ndash;": "–", "&lt;": "<", "&gt;": ">", "&#39;": "'"}
 
 
 @dataclass
@@ -100,13 +100,14 @@ def build_cards(con: duckdb.DuckDBPyConnection, cfg: BuildConfig) -> None:
     con.execute(f"""
         CREATE TEMP TABLE desc_clean AS
         WITH a AS (
-            SELECT CAST(sku_id AS BIGINT) AS sku_id, title,
-                   regexp_replace(description, '(?i)<br\\s*/?>|</p>|</li>|</div>', '\n', 'g') AS description
+            SELECT CAST(sku_id AS BIGINT) AS sku_id, title, {ent} AS description
             FROM read_parquet('{_sql_path(cfg.raw_dir / "sku_desc.parquet")}')
         ), b AS (
-            SELECT sku_id, title, regexp_replace(description, '<[^>]+>', ' ', 'g') AS description FROM a
+            SELECT sku_id, title,
+                   regexp_replace(description, '(?i)<br\\s*/?>|</p>|</li>|</div>', '\n', 'g') AS description
+            FROM a
         ), c AS (
-            SELECT sku_id, title, {ent} AS d FROM b
+            SELECT sku_id, title, regexp_replace(description, '</?[a-zA-Z][^<>]*>', ' ', 'g') AS d FROM b
         )
         SELECT sku_id, trim(title) AS title,
                trim(regexp_replace(regexp_replace(regexp_replace({boiler}, '[ \t]+', ' ', 'g'),
@@ -146,6 +147,11 @@ def build_cards(con: duckdb.DuckDBPyConnection, cfg: BuildConfig) -> None:
     con.execute("DROP TABLE desc_clean")
 
 
+def _canon_str(attr_id: str, value: str | None) -> str | None:
+    # модель в фиде записана с памятью, цветом и артикулом — в эталон идёт только название модели
+    return canon_model(value) if attr_id == "model" else canon_text(value)
+
+
 def _canon_values(con: duckdb.DuckDBPyConnection, reg: Registry) -> pd.DataFrame:
     """Уникальные (attr_id, layer, value, unit) → каноническое значение. Python видит только уникальные значения."""
     distinct = con.execute("""
@@ -161,7 +167,7 @@ def _canon_values(con: duckdb.DuckDBPyConnection, reg: Registry) -> pd.DataFrame
         elif spec.kind == "number":
             canon.append(to_canonical_number(value, unit or None, spec.unit))
         else:
-            canon.append(canon_text(f"{value} {unit}" if unit else value))
+            canon.append(_canon_str(a, f"{value} {unit}" if unit else value))
     distinct["value_canon"] = canon
     distinct["is_placeholder"] = ph
     return distinct
@@ -203,15 +209,16 @@ def build_gold(con: duckdb.DuckDBPyConnection, reg: Registry, log) -> None:
             field_rows.append(f"""
                 SELECT sku_id, '{a}' AS attr_id, {s.feed_field} AS raw FROM raw_offers WHERE {s.feed_field} IS NOT NULL""")
     con.execute(f"CREATE TEMP TABLE gold_fields AS {' UNION ALL '.join(field_rows)}")
-    fields = con.execute("SELECT DISTINCT raw FROM gold_fields").df()
-    fields["value_canon"] = [canon_text(v) for v in fields.raw]
-    fields["is_placeholder"] = [reg.is_placeholder(v) for v in fields.raw]
+    fields = con.execute("SELECT DISTINCT attr_id, raw FROM gold_fields").df()
+    fields["value_canon"] = [_canon_str(a, v) for a, v in zip(fields.attr_id, fields.raw)]
+    # pandas хранит None как NaN: проверяем через isna. Модель из одного цвета («Black») — тоже заглушка
+    fields["is_placeholder"] = [reg.is_placeholder(v) or pd.isna(c) for v, c in zip(fields.raw, fields.value_canon)]
     con.register("field_canon", fields)
     con.execute("""
         INSERT INTO core_gold
         SELECT f.sku_id, f.attr_id, CASE WHEN c.is_placeholder THEN NULL ELSE c.value_canon END,
                NULL, f.raw, NULL, c.is_placeholder, NULL
-        FROM gold_fields f JOIN field_canon c USING (raw);
+        FROM gold_fields f JOIN field_canon c USING (attr_id, raw);
 
         INSERT INTO core_gold
         SELECT g.sku_id, g.attr_id, v.value, CASE WHEN g.kind = 'number' THEN g.unit END, g.raw_s, g.raw_f, false, NULL
@@ -286,28 +293,28 @@ def build_category_schema(con: duckdb.DuckDBPyConnection, reg: Registry, pcfg: d
         for a in reg.attrs:
             fill = float(src.get((key, a), 0.0))
             if fill > 0 or a in tz:
-                rows.append((cid, a, fill, bool(fill >= thr or a in tz), pid if inherit else None))
+                # явный список из ТЗ важнее правила заполненности; для остальных категорий — fill ≥ порога
+                required = a in tz if tz else fill >= thr
+                rows.append((cid, a, fill, bool(required), pid if inherit else None))
     con.executemany("INSERT INTO core_category_schema VALUES (?, ?, ?, ?, ?)", rows)
 
 
 def build_splits(con: duckdb.DuckDBPyConnection, pcfg: dict) -> None:
     s = pcfg["split"]
     seed, test, valid, hold = s["seed"], s["test_share"], s["valid_share"], s["holdout_category_share"]
-    colors = [r[0] for r in con.execute("""
-        SELECT value FROM core_ref_values WHERE attr_id = 'color' AND NOT contains(value, ' ')
-        AND NOT contains(value, '/') ORDER BY n_offers DESC LIMIT 80""").fetchall()]
-    words = sorted({w.replace("|", "") for w in colors + EN_COLORS if w}, key=len, reverse=True)
-    color_re = r"\b(" + "|".join(words) + r")\b" if words else r"$^"
-    color_re = color_re.replace("'", "''")
+    # группа = бренд + модель без памяти и цвета: варианты одной модели не расходятся по train и test
+    models = con.execute("SELECT DISTINCT coalesce(model, name, '') AS raw FROM raw_offers").df()
+    models["model_key"] = [canon_model(v) or "" for v in models.raw]
+    con.register("model_keys", models)
     con.execute(f"""
         INSERT INTO core_splits
         WITH base AS (
             SELECT o.sku_id, o.category_id,
-                   coalesce(lower(o.vendor), '') || '|' ||
-                   trim(regexp_replace(regexp_replace(lower(replace(coalesce(o.model, o.name, ''), 'ё', 'е')),
-                                                      '{color_re}', '', 'g'), '\\s+', ' ', 'g')) AS model_key,
+                   coalesce(lower(o.vendor), '') || '|' || m.model_key AS model_key,
                    md5(d.description) AS desc_hash
-            FROM raw_offers o LEFT JOIN core_cards d USING (sku_id)
+            FROM raw_offers o
+            JOIN model_keys m ON m.raw = coalesce(o.model, o.name, '')
+            LEFT JOIN core_cards d USING (sku_id)
         ), grp AS (
             -- дубли описаний попадают в одну группу с вариантами модели
             SELECT sku_id, category_id,
@@ -322,6 +329,7 @@ def build_splits(con: duckdb.DuckDBPyConnection, pcfg: dict) -> None:
                     ELSE 'train' END,
                group_key
         FROM grp""")
+    con.unregister("model_keys")
 
 
 def build_traffic_weights(con: duckdb.DuckDBPyConnection) -> None:
