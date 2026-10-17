@@ -25,11 +25,7 @@ CREATE TABLE IF NOT EXISTS raw_params (
     unit          VARCHAR         -- атрибут @unit: единица часто лежит здесь, а не в value
 );
 
-CREATE TABLE IF NOT EXISTS raw_descriptions (
-    sku_id        BIGINT PRIMARY KEY,
-    title         VARCHAR,
-    description   VARCHAR         -- с HTML
-);
+-- сырые тексты карточек (с HTML) в БД не копируем: они в data/raw/sku_desc.parquet, очищенные — в core_cards
 
 -- клики агрегированы по (запрос, sku): полная таблица 31 млн строк читается из parquet напрямую
 CREATE TABLE IF NOT EXISTS raw_clicks_sku (
@@ -42,7 +38,7 @@ CREATE TABLE IF NOT EXISTS raw_clicks_sku (
 CREATE TABLE IF NOT EXISTS core_cards (
     sku_id          BIGINT PRIMARY KEY,
     title           VARCHAR,
-    description     VARCHAR,       -- без HTML и шаблонных фраз
+    description     VARCHAR USING COMPRESSION zstd,  -- без HTML и шаблонных фраз; zstd сжимает тексты в ~7 раз
     has_offer       BOOLEAN,       -- есть ли карточка в фиде (есть ли эталон)
     category_id     INTEGER,
     category_source VARCHAR,       -- feed | clicks | title
