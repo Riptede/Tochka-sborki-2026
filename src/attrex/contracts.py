@@ -4,11 +4,18 @@ Card           — вход пайплайна: текст карточки.
 CategorySchema — какие атрибуты нужно заполнить у карточки этой категории.
 Candidate      — значение, которое предложил один шаг каскада (правила, retrieval, LLM).
 Extractor      — интерфейс шага каскада: Card + схема + кандидаты прошлых шагов → новые кандидаты.
+BuildContext   — что получает фабрика шага `build(ctx) -> Extractor` при сборке пайплайна.
 Prediction     — итоговое решение по атрибуту карточки; строка файла predictions.
 """
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
+
+if TYPE_CHECKING:
+    import duckdb
+
+T = TypeVar("T")
 
 
 class Step(StrEnum):
@@ -82,6 +89,25 @@ class Extractor(Protocol):
     step: Step
 
     def extract(self, card: Card, schema: CategorySchema, prior: list[Candidate]) -> list[Candidate]: ...
+
+
+@dataclass
+class BuildContext:
+    """Контекст сборки шагов каскада. Каждый модуль шага отдаёт фабрику `build(ctx) -> Extractor`.
+
+    Словари и индексы шаг строит из БД через resource(): ресурс строится один раз и общий для всех шагов,
+    поэтому правила, парсер и grounding работают с одним справочником. Готовый шаг не держит соединение с БД:
+    его можно передать в другой процесс.
+    """
+    con: "duckdb.DuckDBPyConnection"                  # БД только на чтение
+    config: dict[str, Any]                            # configs/pipeline.yaml
+    knowledge_folds: tuple[str, ...] = ("train",)     # из эталона каких фолдов строим словари; test — никогда
+    _resources: dict = field(default_factory=dict, repr=False)
+
+    def resource(self, factory: Callable[["BuildContext"], T]) -> T:
+        if factory not in self._resources:
+            self._resources[factory] = factory(self)
+        return self._resources[factory]
 
 
 @dataclass
