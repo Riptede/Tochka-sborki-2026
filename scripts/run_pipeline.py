@@ -54,6 +54,8 @@ def main() -> None:
     if a.raw_confidence:
         cfg = {**cfg, "confidence": {**cfg["confidence"], "calibration": None}}
     steps = parse_steps(a.steps, list(cfg["cascade"]))
+    if "llm" in steps and cfg["llm"].get("enabled") and a.workers > 1:
+        ap.error("LLM-прогон — с --workers 1: бюджет llm.budget_rub считается на процесс")
     folds = _csv(a.fold)
     knowledge = _csv(a.knowledge_folds) or tuple(cfg["knowledge_folds"])
     if set(folds) & set(knowledge):

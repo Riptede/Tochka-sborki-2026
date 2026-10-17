@@ -165,6 +165,8 @@ outputs/                  НЕ в git: predictions и отчёты прогон�
 `OPENAI_API_KEY`); клиент `openai` читает их сам. Модели и цены — в `configs/pipeline.yaml` (рубли за 1 тыс. токенов):
 основная LLM `ai-sage/GigaChat3-10B-A1.8B`, запасная `openai/gpt-oss-120b`, эмбеддинги `BAAI/bge-m3`.
 Дорогие модели (DeepSeek-V4-Pro, Qwen3.6, GigaChat-3-Pro) в основной поток не пускаем.
+Учёт рублей и бюджет считаются по `llm.prices_rub_per_1k` / `embeddings.prices_rub_per_1k`; ответы кэшируются
+в `data/processed/llm_cache.sqlite`. Бюджет — на процесс, поэтому LLM-прогон идёт с `--workers 1`.
 
 ## Что знаем о данных (из EDA, не перепроверять заново)
 
@@ -220,6 +222,6 @@ git push                        # сдача: из ~/project на ВМ в Gitea
 | 2 | b2 | правила + единицы + парсер «ключ: значение»; базлайн predictions только на правилах. Правила — ветка `b2/rules-baseline` |
 | 3 | b4 | метрики и ablation-таблица для базлайна; формат файла сдачи. Ветка `b4/pipeline-baseline` |
 | 4 | b2 | шаг 0 (категория), retrieval на bge-m3 через API (запасной вариант — e5-small на CPU), калибровка уверенности. Шаг 0 — ветка `b2/category-baseline`, retrieval (триграммы, Encoder под эмбеддинги) — `b2/retrieval-baseline` |
-| 5 | b3 | LLM-шаг на остатке с бюджетом; вклад в ablation |
+| 5 | b3 | LLM-шаг на остатке с бюджетом; вклад в ablation. Клиент и шаг — ветка `b3/llm-baseline` (по умолчанию выключен) |
 | 6 | b5 | очередь проверки на реальных predictions, возврат решений в словари; прототип → рабочий интерфейс |
 | 7 | все | README по шагам запуска, презентация с цифрами из прогона |
