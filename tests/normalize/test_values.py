@@ -29,6 +29,15 @@ def test_canonical_values(res):
     assert n.canonical("model", "Galaxy S25 Ultra 12/256GB Titanium Gray").value == "galaxy s25 ultra"
 
 
+def test_same_value(res):
+    n = res.normalizer
+    assert n.same("screen_diag", "15.59", "15.6")
+    assert n.same("cpu", "intel core i3-1215u 1.2 ггц", "intel core i3-1215u 0.9 ггц")   # частота не в счёт
+    assert not n.same("cpu", "intel core i3-1215u 1.2 ггц", "intel core i5-13420h 2.1 ггц")
+    assert not n.same("color", "черный", "белый")
+    assert not n.same("color", None, "белый")
+
+
 def test_supports_after_normalization(res):
     n = res.normalizer
     assert n.supports("storage", "8/256GB", "256")
