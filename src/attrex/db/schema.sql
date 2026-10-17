@@ -126,7 +126,10 @@ CREATE TABLE IF NOT EXISTS pred_runs (
     git_commit      VARCHAR,
     config          JSON,
     llm_calls       INTEGER,
-    llm_cost_usd    DOUBLE
+    llm_tokens      BIGINT,
+    llm_cost_rub    DOUBLE,        -- цены платформы в рублях за 1 тыс. токенов (configs/pipeline.yaml)
+    embed_tokens    BIGINT,
+    embed_cost_rub  DOUBLE
 );
 
 -- rev: ручная проверка ----------------------------------------------------------
