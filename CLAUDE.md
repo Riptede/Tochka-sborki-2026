@@ -56,6 +56,7 @@ pred_predictions, outputs/predictions.* (b4) → очередь проверки
 ```
 configs/attributes.yaml   реестр атрибутов: attr_id, тип, единица, поля фида, обязательные по категориям
 configs/pipeline.yaml     пороги, параметры LLM, разбиение
+configs/normalize.yaml    b2: ключевые слова и алиасы атрибутов, ручные синонимы, скоры правил
 src/attrex/paths.py       все пути проекта
 src/attrex/registry.py    загрузка реестра атрибутов
 src/attrex/contracts.py   Card, CategorySchema, Candidate, Extractor, Prediction, перечисления Step/Source/Status
@@ -104,6 +105,12 @@ outputs/                  НЕ в git: predictions и отчёты прогон�
 
 **Шаг каскада:** реализует `Extractor.extract(card, schema, prior) -> list[Candidate]`. Шаг не выбирает итоговое
 значение и не пишет в БД.
+
+**Сборка шага:** модуль шага отдаёт фабрику `build(ctx: BuildContext) -> Extractor` (`contracts.py`). Словари шаг
+строит из БД (только чтение) через `ctx.resource(...)`: один ресурс — один экземпляр на все шаги. Словари, раскладки
+и пороги строятся только из эталона `ctx.knowledge_folds` (по умолчанию `train`), никогда из `test`.
+Общие ресурсы b2 — `normalize/resources.py`: справочник (`dictionary.py`), приведение к канону (`values.py`)
+и grounding (`grounding.py`).
 
 **Итог по атрибуту:** `Prediction`, колонки файла — `PREDICTION_COLUMNS`. Файл сдачи — `outputs/predictions.parquet`
 и `.csv`, одна строка на пару (sku_id, attr_id) для всех обязательных атрибутов категории карточки, включая пустые.
@@ -206,7 +213,7 @@ git push                        # сдача: из ~/project на ВМ в Gitea
 | Шаг | Блок | Результат |
 |---|---|---|
 | 1 | b1 | ✅ `scripts/build_db.py`: raw_* и core_cards, core_gold, core_attr_name_map, core_category_schema, core_ref_values, core_splits. Дальше: `core_gold.in_text` (где лежит значение) и веса трафика v1 |
-| 2 | b2 | правила + единицы + парсер «ключ: значение»; базлайн predictions только на правилах |
+| 2 | b2 | правила + единицы + парсер «ключ: значение»; базлайн predictions только на правилах. Правила — ветка `b2/rules-baseline` |
 | 3 | b4 | метрики и ablation-таблица для базлайна; формат файла сдачи |
 | 4 | b2 | шаг 0 (категория), retrieval на bge-m3 через API (запасной вариант — e5-small на CPU), калибровка уверенности |
 | 5 | b3 | LLM-шаг на остатке с бюджетом; вклад в ablation |
