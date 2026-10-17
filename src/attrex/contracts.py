@@ -1,11 +1,14 @@
 """Контракты между блоками. Меняем только по договорённости всей команды (см. CLAUDE.md).
 
-Card       — вход пайплайна: текст карточки.
-Candidate  — значение, которое предложил один шаг каскада (правила, retrieval, LLM).
-Prediction — итоговое решение по атрибуту карточки; строка файла predictions.
+Card           — вход пайплайна: текст карточки.
+CategorySchema — какие атрибуты нужно заполнить у карточки этой категории.
+Candidate      — значение, которое предложил один шаг каскада (правила, retrieval, LLM).
+Extractor      — интерфейс шага каскада: Card + схема + кандидаты прошлых шагов → новые кандидаты.
+Prediction     — итоговое решение по атрибуту карточки; строка файла predictions.
 """
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
+from typing import Protocol
 
 
 class Step(StrEnum):
@@ -50,6 +53,14 @@ class Card:
     category_source: CategorySource | None = None
 
 
+@dataclass(frozen=True)
+class CategorySchema:
+    category_id: int | None
+    required: tuple[str, ...]            # attr_id из реестра
+    inherited_from: int | None = None    # категория-родитель, если своя схема пустая
+    global_only: bool = False            # категория неуверенная: заполняем только сквозные атрибуты
+
+
 @dataclass
 class Candidate:
     attr_id: str
@@ -59,6 +70,18 @@ class Candidate:
     score: float               # сырой скор шага, до калибровки
     value_raw: str = ""        # как записано в тексте
     evidence: str = ""         # фрагмент текста, подтверждающий значение (для grounding и UI)
+
+
+class Extractor(Protocol):
+    """Шаг каскада. Каждый шаг (правила, парсер, retrieval, LLM) реализует этот интерфейс.
+
+    prior — кандидаты всех предыдущих шагов по этой карточке. Шаг сам решает, какие атрибуты ему
+    обрабатывать: дорогие шаги берут только пустые и неуверенные. Шаг не выбирает итоговое значение
+    и не пишет в БД: это делают confidence (b2) и pipeline (b4).
+    """
+    step: Step
+
+    def extract(self, card: Card, schema: CategorySchema, prior: list[Candidate]) -> list[Candidate]: ...
 
 
 @dataclass

@@ -26,6 +26,31 @@
 Блок трогает чужой код только через контракты ниже. Нужен новый столбец или поле — сначала правка контракта
 и этого файла, потом код.
 
+## Каскад: кто кого вызывает
+
+Оркестратор — `src/attrex/pipeline.py` (b4). Для каждой карточки:
+
+```
+core_cards (b1)
+  → 0. категория            category/classifier.py (b2)      Card.category_id, category_conf, category_source
+  → 1. схема                db: core_category_schema (b1)    CategorySchema; category_conf < 0.60 → global_only
+  → 2. правила              normalize/rules.py (b2)          Candidate step=rules     ┐
+  → 3. парсер описания      normalize/kv_parser.py (b2)      Candidate step=parse     │ Extractor.extract()
+  → 4. retrieval            normalize/retrieval.py (b2)      Candidate step=retrieval ┘
+  → 5. уверенность          confidence/aggregate.py (b2)     значение + откалиброванная уверенность по атрибуту
+  → 6. LLM                  llm/extractor.py (b3)            только пустые и ниже порога, где в тексте есть зацепка
+  → 5. уверенность ещё раз  confidence/aggregate.py (b2)
+  → 7. своя модель          normalize/model_match.py (b2)    только если значения нет в тексте; step=model_match
+  → 8. решение              pipeline.py (b4)                 Prediction: accepted ≥ порога, review ниже, empty
+pred_predictions, outputs/predictions.* (b4) → очередь проверки rev_* (b5)
+```
+
+Правила каскада:
+- Значение без `evidence` из текста этой карточки не может получить `status=accepted`. Проверка одна на всех —
+  `normalize/grounding.py` (b2): сравнение после нормализации единиц и синонимов, а не по строке. LLM использует её же.
+- Нормализация значения к канону (`units.py`, словари) — общая библиотека b2; b3 не пишет свою.
+- Шаги можно отключать флагом прогона: так строится ablation-таблица (правила → + парсер → + retrieval → + LLM).
+
 ## Структура репозитория
 
 ```
@@ -35,8 +60,12 @@ src/attrex/paths.py       все пути проекта
 src/attrex/registry.py    загрузка реестра атрибутов
 src/attrex/contracts.py   Card, Candidate, Prediction, перечисления Step/Source/Status
 src/attrex/db/schema.sql  схема DuckDB
-src/attrex/<блок>/        код блока
-scripts/                  точки входа: сборка БД, прогон пайплайна, метрики
+src/attrex/<блок>/        код блока (модули — в схеме каскада ниже)
+src/attrex/pipeline.py    оркестратор каскада (b4)
+scripts/build_db.py       b1: data/raw → data/attrex.duckdb (raw_*, core_*)
+scripts/run_pipeline.py   b4: прогон каскада → pred_predictions; флаги --run-id, --steps, --limit, --category
+scripts/evaluate.py       b4: метрики и ablation по run_id → outputs/<run_id>/report.md
+scripts/export.py         b4: файл сдачи outputs/predictions.parquet и .csv
 notebooks/NN_тема.ipynb   ноутбуки; номер задаёт порядок, в первой ячейке — блок и автор
 apps/review_prototype/    кликабельный прототип интерфейса модератора (статичный HTML)
 tests/                    pytest
@@ -53,7 +82,11 @@ outputs/                  НЕ в git: predictions и отчёты прогон�
 - Единицы в канонической форме реестра: `GB`, `in`, `mAh`, `kg`, `cm`. Числа хранятся строкой в этой единице: `"256"`, `"6.7"`.
 - Таблицы БД: `raw_` — как у организатора, `core_` — очищенное и эталон, `pred_` — результаты прогона, `rev_` — ручная проверка.
 - Значения перечислений (`step`, `source`, `status`) — только из `contracts.py`.
-- Ветки: `b<N>/<коротко>` — `b2/units-regex`, `b3/llm-client`. Коммит: `b2: конвертация единиц памяти`.
+- Ветки: `b<N>/<коротко>` — `b2/units-regex`, `b3/llm-client`; общие задачи (структура, CI, README) — `setup/<коротко>`.
+  Коммит: `b2: конвертация единиц памяти`, `setup: …`. В `main` — только через Pull Request в Gitea, напрямую не пушим.
+- Модули блока — существительные по роли: `rules.py`, `kv_parser.py`, `retrieval.py`, `client.py`.
+  Класс шага каскада — `<Что>Extractor` (`RulesExtractor`, `LlmExtractor`) и атрибут `step` из `Step`.
+- Тесты: `tests/<блок>/test_<модуль>.py` с маленькими фикстурами в коде, без чтения `data/`.
 - Прогон пайплайна: `run_id` = `YYYYMMDD-HHMM-<коротко>`, например `20261017-1530-rules-only`.
 
 ## Контракты
@@ -64,6 +97,9 @@ outputs/                  НЕ в git: predictions и отчёты прогон�
 `evidence` обязателен для любого непустого значения: это фрагмент текста карточки, который подтверждает значение.
 Без него значение не проходит grounding.
 
+**Шаг каскада:** реализует `Extractor.extract(card, schema, prior) -> list[Candidate]`. Шаг не выбирает итоговое
+значение и не пишет в БД.
+
 **Итог по атрибуту:** `Prediction`, колонки файла — `PREDICTION_COLUMNS`. Файл сдачи — `outputs/predictions.parquet`
 и `.csv`, одна строка на пару (sku_id, attr_id) для всех обязательных атрибутов категории карточки, включая пустые.
 
@@ -71,8 +107,13 @@ outputs/                  НЕ в git: predictions и отчёты прогон�
 
 ## Где работаем: ВМ хакатона
 
-- Главная копия кода — **Gitea платформы** (`origin` в `~/project` на ВМ, внутренний адрес, доступен только с ВМ).
-  Платформа сама ничего не сохраняет: сдача — это `git push` в Gitea. Локальные копии синхронизируются через неё.
+- Главная копия кода — **Gitea платформы**. Платформа сама ничего не сохраняет: сдача — это `git push` в Gitea.
+  - на ВМ: `~/project`, remote `origin` = `http://10.250.0.5:3000/tochka-sborki-2026-team-055/project.git`;
+  - с ноутбука: через SSH-туннель `ssh -N -L 3000:10.250.0.5:3000 hack-vm`, remote
+    `http://localhost:3000/tochka-sborki-2026-team-055/project.git`. Claude Code на ВМ не запускается (регион
+    API заблокирован), поэтому Claude работает с ноутбука, а тяжёлые прогоны запускаются на ВМ после `git pull`.
+- Подключение к ВМ: `ssh -J jump@84.54.59.198 tochka-sborki-2026-team-055@10.250.0.60` или `ssh hack-vm`
+  с блоками `hack-jump` / `hack-vm` в `~/.ssh/config`.
 - ВМ: 4 ядра, 7,8 ГБ RAM, **swap нет, GPU нет**, 56 ГБ диска, Ubuntu 22.04, системный Python 3.10 (проект живёт
   в `.venv` на Python 3.11+ через `uv`). Из этого:
   - `EDA_FAST_PICKLE=1` на ВМ **не включать**: загрузка `skus.pkl` целиком требует ~10 ГБ и убьёт процесс.

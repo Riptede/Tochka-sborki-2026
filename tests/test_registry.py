@@ -40,3 +40,18 @@ def test_prediction_row_matches_columns():
     row = p.to_row()
     assert set(row) == set(PREDICTION_COLUMNS)
     assert row["step"] == "retrieval"
+
+
+def test_extractor_protocol_shape():
+    from attrex.contracts import Candidate, Card, CategorySchema, Extractor
+
+    class Dummy:
+        step = Step.RULES
+
+        def extract(self, card: Card, schema: CategorySchema, prior: list[Candidate]) -> list[Candidate]:
+            return [Candidate(attr_id="brand", value="Samsung", step=self.step, source=Source.TITLE, score=1.0,
+                              evidence="Samsung")]
+
+    ex: Extractor = Dummy()
+    out = ex.extract(Card(sku_id=1, title="Смартфон Samsung"), CategorySchema(761, ("brand",)), [])
+    assert out[0].evidence in "Смартфон Samsung"
