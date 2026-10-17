@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Атрибуты карточек</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: рабочий инструмент модератора. Шапка с вкладками, под ней рабочая область: список слева, детали справа. */
+:root {
+  --bg: #f6f7f5;
+  --panel: #ffffff;
+  --ink: #15201d;
+  --ink-2: #4c5753;
+  --ink-3: #7b8581;
+  --line: #dfe3e0;
+  --line-2: #eceeec;
+  --accent: #0f6e66;
+  --accent-soft: #dcefec;
+  --good: #0ca30c;
+  --good-ink: #08700a;
+  --warn: #fab219;
+  --warn-ink: #8a5a00;
+  --warn-soft: #fff3d6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s-none: #b9bfbc;
+  --m1: rgba(42,120,214,.16); --m2: rgba(235,104,52,.18); --m3: rgba(27,175,122,.18); --m4: rgba(237,161,0,.22);
+  --font-ui: "Golos Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121615; --panel: #1a1f1e; --ink: #ecefed; --ink-2: #b7bfbb; --ink-3: #87908c;
+    --line: #2d3432; --line-2: #232928; --accent: #4fc2b6; --accent-soft: #173a36;
+    --good: #0ca30c; --good-ink: #5fd35f; --warn: #fab219; --warn-ink: #f6c55a; --warn-soft: #3a2f12;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s-none: #4a524f;
+    --m1: rgba(57,135,229,.28); --m2: rgba(217,89,38,.3); --m3: rgba(25,158,112,.3); --m4: rgba(201,133,0,.32);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121615; --panel: #1a1f1e; --ink: #ecefed; --ink-2: #b7bfbb; --ink-3: #87908c;
+  --line: #2d3432; --line-2: #232928; --accent: #4fc2b6; --accent-soft: #173a36;
+  --good: #0ca30c; --good-ink: #5fd35f; --warn: #fab219; --warn-ink: #f6c55a; --warn-soft: #3a2f12;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s-none: #4a524f;
+  --m1: rgba(57,135,229,.28); --m2: rgba(217,89,38,.3); --m3: rgba(25,158,112,.3); --m4: rgba(201,133,0,.32);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+.wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 16px; font-weight: 600; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.sub { color: var(--ink-2); font-size: 13px; }
+.notice { background: var(--warn-soft); color: var(--ink); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.notice b { font-weight: 600; }
+
+nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+nav.tabs button {
+  font: inherit; font-weight: 500; color: var(--ink-2); background: none; border: 0; border-bottom: 2px solid transparent;
+  padding: 10px 12px; cursor: pointer; white-space: nowrap;
+}
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+nav.tabs button:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.count { font-family: var(--font-data); font-size: 12px; background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 1px 7px; margin-left: 4px; }
+
+/* экран 1 */
+.split { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.cardlist { display: grid; gap: 6px; }
+.cardlist button {
+  text-align: left; font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; cursor: pointer; display: grid; gap: 4px;
+}
+.cardlist button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.cardlist .t { font-weight: 500; font-size: 13px; line-height: 1.35; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-size: 11px; letter-spacing: .02em; border-radius: 4px; padding: 1px 6px; background: var(--line-2); color: var(--ink-2); white-space: nowrap; }
+.chip.warn { background: var(--warn-soft); color: var(--warn-ink); }
+.chip.acc { background: var(--accent-soft); color: var(--accent); }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.detail { display: grid; gap: 16px; min-width: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+.meta b { color: var(--ink); font-weight: 500; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); font-weight: 600; }
+.source-text { display: grid; gap: 10px; }
+.title-text { font-size: 16px; font-weight: 600; line-height: 1.4; }
+.desc-text { white-space: pre-wrap; color: var(--ink-2); max-height: 260px; overflow: auto; border-top: 1px solid var(--line-2); padding-top: 10px; font-size: 13.5px; }
+mark { color: inherit; border-radius: 3px; padding: 0 2px; transition: outline-color .15s; outline: 2px solid transparent; }
+mark.k-rules { background: var(--m1); }
+mark.k-parse { background: var(--m2); }
+mark.k-retr { background: var(--m3); }
+mark.k-llm { background: var(--m4); }
+mark.lit { outline-color: var(--ink); }
+
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+tr.attr-row { cursor: default; }
+tr.attr-row:hover td, tr.attr-row.on td { background: var(--line-2); }
+.val { font-weight: 600; }
+.raw { font-size: 12px; color: var(--ink-3); }
+.empty { color: var(--ink-3); font-style: italic; font-weight: 400; }
+.conf { display: grid; grid-template-columns: 64px auto; align-items: center; gap: 8px; }
+.bar { position: relative; height: 6px; background: var(--line-2); border-radius: 3px; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+.bar::after { content: ""; position: absolute; left: 75%; top: -3px; bottom: -3px; width: 1px; background: var(--ink-3); }
+.status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
+.status .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.st-ok { color: var(--good-ink); } .st-ok .dot { background: var(--good); }
+.st-rev { color: var(--warn-ink); } .st-rev .dot { background: var(--warn); }
+.st-none { color: var(--ink-3); } .st-none .dot { background: var(--s-none); }
+.step { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+.sw { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.sw.k-rules { background: var(--s1); } .sw.k-parse { background: var(--s2); } .sw.k-retr { background: var(--s3); } .sw.k-llm { background: var(--s4); } .sw.k-none { background: var(--s-none); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--ink-2); }
+.foot { font-size: 12.5px; color: var(--ink-3); }
+
+/* экран 2 */
+.queue { display: grid; gap: 10px; }
+.qitem { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: start; }
+@media (max-width: 720px) { .qitem { grid-template-columns: minmax(0, 1fr); } }
+.qhead { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.qhead .attr { font-weight: 600; }
+.qhead .prod { color: var(--ink-2); font-size: 13px; }
+.why { font-size: 13px; color: var(--ink-2); }
+.cand { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-top: 4px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.btn { font: inherit; font-size: 13px; font-weight: 500; border-radius: 6px; padding: 6px 12px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+select { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.resolved { font-size: 13px; color: var(--good-ink); display: flex; gap: 6px; align-items: baseline; }
+.toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); border-radius: 8px; padding: 10px 14px; font-size: 13px; max-width: min(560px, calc(100% - 32px)); box-shadow: 0 6px 24px rgba(0,0,0,.18); }
+
+/* экран 3 */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.fact { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; }
+.fact .big { font-size: 22px; font-weight: 600; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.fact .cap { font-size: 12.5px; color: var(--ink-2); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 6px 12px; border: 0; background: var(--panel); color: var(--ink-2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.chart { display: grid; gap: 10px; position: relative; }
+.crow { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: center; }
+@media (max-width: 520px) { .crow { grid-template-columns: 88px minmax(0, 1fr); } }
+.crow .name { font-size: 13px; color: var(--ink); text-align: right; }
+.stack { display: flex; height: 22px; gap: 2px; }
+.stack span { display: block; height: 100%; min-width: 0; }
+.stack span:first-child { border-radius: 4px 0 0 4px; }
+.stack span:last-child { border-radius: 0 4px 4px 0; }
+.stack span:only-child { border-radius: 4px; }
+.axis { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; font-size: 11px; color: var(--ink-3); font-family: var(--font-data); }
+@media (max-width: 520px) { .axis { grid-template-columns: 88px minmax(0, 1fr); } }
+.axis div:last-child { display: flex; justify-content: space-between; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font-size: 12.5px; box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap; z-index: 2; }
+.tip b { font-family: var(--font-data); }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.flow div { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 4px; font-size: 13px; background: var(--panel); }
+.flow .step { font-weight: 600; color: var(--ink); }
+.flow p { margin: 0; color: var(--ink-2); font-size: 12.5px; }
+details summary { cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Атрибуты карточек</h1>
+      <div class="sub">Рабочее место модератора каталога: что извлёк пайплайн, откуда, с какой уверенностью</div>
+    </div>
+    <div class="sub num">кейс М.Видео · прототип интерфейса</div>
+  </header>
+
+  <div class="notice"><b>Прототип.</b> Карточки, тексты и значения атрибутов взяты из датасета кейса (эталон фида). Уверенность и шаги каскада условные: пайплайн в разработке. Данные на вкладке «Сводка по категории» посчитаны в EDA.</div>
+
+  <nav class="tabs" role="tablist" aria-label="Экраны">
+    <button role="tab" id="tab-card" aria-selected="true" aria-controls="pane-card">Разбор карточки</button>
+    <button role="tab" id="tab-queue" aria-selected="false" aria-controls="pane-queue">Очередь проверки <span class="count" id="qcount">0</span></button>
+    <button role="tab" id="tab-cat" aria-selected="false" aria-controls="pane-cat">Сводка по категории</button>
+  </nav>
+
+  <section id="pane-card" role="tabpanel" aria-labelledby="tab-card">
+    <div class="split">
+      <div class="cardlist" id="cardlist" aria-label="Карточки"></div>
+      <div class="detail" id="detail"></div>
+    </div>
+  </section>
+
+  <section id="pane-queue" role="tabpanel" aria-labelledby="tab-queue" hidden>
+    <div class="detail">
+      <div class="toolbar">
+        <div>
+          <h2>Очередь ручной проверки</h2>
+          <div class="sub">Значения ниже порога уверенности 0,75. Порядок по трафику: сначала товары, которые чаще кликают в поиске.</div>
+        </div>
+        <div class="sub num" id="qstat"></div>
+      </div>
+      <div class="queue" id="queue"></div>
+      <div class="foot">Каждое решение возвращается в пайплайн: синонимы пополняют словарь и индекс retrieval, отметки «нет в тексте» уточняют пороги.</div>
+    </div>
+  </section>
+
+  <section id="pane-cat" role="tabpanel" aria-labelledby="tab-cat" hidden>
+    <div class="detail">
+      <div class="toolbar">
+        <div>
+          <h2>Где в карточке лежит значение</h2>
+          <div class="sub">Эталон фида против текста карточки (заголовок и описание). От этого зависит, какой шаг каскада закроет атрибут.</div>
+        </div>
+        <div class="seg" role="group" aria-label="Категория">
+          <button id="c-phones" aria-pressed="true">Смартфоны</button>
+          <button id="c-laptops" aria-pressed="false">Ноутбуки</button>
+        </div>
+      </div>
+      <div class="facts" id="facts"></div>
+      <div class="panel">
+        <div class="legend" id="legend" style="margin-bottom:12px"></div>
+        <div class="chart" id="chart"></div>
+        <details style="margin-top:12px">
+          <summary>Таблица</summary>
+          <div class="tbl-wrap" id="ctable" style="margin-top:8px"></div>
+        </details>
+      </div>
+      <div class="flow" id="flow"></div>
+      <div class="foot">Доли по карточкам, у которых есть и оффер, и описание. Сумма строки может отличаться от 100% из-за округления.</div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+const STEP = {
+  rules: { cls: "k-rules", name: "Правила и regex" },
+  parse: { cls: "k-parse", name: "Парсер описания" },
+  retr:  { cls: "k-retr",  name: "Словарь и retrieval" },
+  llm:   { cls: "k-llm",   name: "LLM с проверкой по тексту" },
+  none:  { cls: "k-none",  name: "Нет в тексте" }
+};
+const THRESHOLD = 0.75;
+
+const CARDS = [
+  {
+    id: "30079343", cat: "Смартфоны", catHow: "из фида", seg: "1P", clicks: 15356, tags: ["новый"],
+    title: "Смартфон Samsung Galaxy S25 Ultra 5G 12/256GB Черный",
+    desc: "Смартфон Samsung Galaxy S25 Ultra 5G Titanium Black получил 6,9-дюймовый AMOLED-экран разрешением 3120x1440 пикселей с частотой обновления 120 Гц. Объем встроенной памяти для установки приложений и хранения данных — 256 Гб.\n\n• Искусственный интеллект Galaxy AI\nРасширяет возможности устройства, поддерживает множество новых функций. Например, предлагает персональные сводки на день со списком дел, улучшает качество фото и видео, упрощает их обработку, помогает искать информацию в интернете при помощи функции «Обведи и найди».\n\n• Восьмиядерный процессор Qualcomm Snapdragon 8 Elite\nСоздан специально для Galaxy. В сочетании с 12 Гб оперативной памяти гарантирует быстроту и стабильность при выполнении задач любой сложности.\n\n• Титановая рамка и ударопрочное стекло Corning Gorilla Armor 2\nПовышают прочность корпуса, делают его более устойчивым к механическим воздействиям. Защита от пыли и влаги соответствует стандарту IP68.\n\nТыловой блок камер представлен широкоугольным объективом 200 Мп с оптическим зумом 2х, ультраширокоугольным — 50 Мп, телефото с оптическим зумом 5х — 50 Мп и телефото 10 Мп с оптическим зумом 3х. Также установлена фронтальная камера — 12 Мп.\n\nАвтономную работу обеспечивает аккумулятор емкостью 5000 мА*ч. Согласно тестированию производителя, он предоставляет до 31 часа просмотра видео. Сканер отпечатка пальца для авторизации владельца и защиты личных данных расположен в экране.",
+    attrs: [
+      { a: "Бренд", v: "Samsung", c: 0.99, step: "rules", ev: [["title", "Samsung"]] },
+      { a: "Модель", v: null, raw: "в фиде внутренний артикул SM-S938B, в тексте его нет", c: null, step: "none", ev: [] },
+      { a: "Объём памяти", v: "256 ГБ", raw: "12/256GB · 256 Гб", c: 0.97, step: "rules", ev: [["title", "12/256GB"], ["desc", "256 Гб"]] },
+      { a: "Диагональ экрана", v: "6,9″", raw: "6,9-дюймовый", c: 0.93, step: "parse", ev: [["desc", "6,9-дюймовый"]] },
+      { a: "Ёмкость батареи", v: "5000 мАч", raw: "5000 мА*ч", c: 0.92, step: "parse", ev: [["desc", "5000 мА*ч"]] },
+      { a: "Цвет", v: "черный", raw: "Черный · Titanium Black", c: 0.95, step: "retr", ev: [["title", "Черный"], ["desc", "Titanium Black"]] }
+    ]
+  },
+  {
+    id: "30074349", cat: "Смартфоны", catHow: "из фида", seg: "1P", clicks: 3655, tags: ["восстановленный"],
+    title: "Восстановленный смартфон Samsung Galaxy S24 Ultra 12/256GB Marble Gray, хороший",
+    desc: "Внешний вид: «Хороший».\nСмартфон ранее принадлежал другому пользователю.\nУстройство имеет потертости и царапины, которые можно скрыть чехлом и стеклом.\nЗарядное устройство и другие аксессуары в комплект не входят.",
+    attrs: [
+      { a: "Бренд", v: "Samsung", c: 0.99, step: "rules", ev: [["title", "Samsung"]] },
+      { a: "Состояние", v: "восстановленный, хороший", c: 0.98, step: "rules", ev: [["title", "Восстановленный"], ["title", "хороший"]] },
+      { a: "Объём памяти", v: "256 ГБ", raw: "12/256GB", c: 0.97, step: "rules", ev: [["title", "12/256GB"]] },
+      { a: "Цвет", v: "серый", raw: "Marble Gray", c: 0.84, step: "retr", ev: [["title", "Marble Gray"]] },
+      { a: "Диагональ экрана", v: "6,8″", raw: "в тексте нет; кандидат из карточки той же модели SM-S928", c: 0.60, step: "none", ev: [], review: "Значения нет в тексте. Кандидат взят из карточки той же модели и помечен отдельным источником." },
+      { a: "Ёмкость батареи", v: "5000 мАч", raw: "в тексте нет; кандидат из карточки той же модели SM-S928", c: 0.58, step: "none", ev: [], review: "Значения нет в тексте. Кандидат взят из карточки той же модели и помечен отдельным источником." }
+    ]
+  },
+  {
+    id: "30072074", cat: "Ноутбуки", catHow: "из фида", seg: "1P", clicks: 12563, tags: ["новый"],
+    title: "Ноутбук HUAWEI MateBook D 14 MDG-X i5/16/512GB DOS космический серый",
+    desc: "Ноутбук Huawei MateBook D 14 MDG-X i5/16/512GB DOS Space Gray выполнен в тонком металлическом корпусе, его размеры составляют 15,9х314х227 мм, вес — 1,39 кг. Установлена операционная система DOS.\n\n• Основные характеристики\nВысокую производительность обеспечивает восьмиядерный процессор Intel Core i5 13420H частотой 2,1 ГГц, которая может при пиковых нагрузках увеличиваться до 4,6 ГГц, и 16 Гб оперативной памяти LPDDR4X.\n\n• SSD объемом 512 Гб\nТвердотельный накопитель гарантирует тихую работу и быструю загрузку системы, дает возможность устанавливать большое количество программ и хранить множество фотографий, видеороликов, фильмов, различных документов и прочего.\n\n• IPS-экран диагональю 14 дюймов\nОбладает разрешением 1920x1200 пикселей, отличается высокой яркостью, контрастностью и точностью цветопередачи. Предусмотрена защита от вредного синего света и мерцания, которые оказывают негативное влияние на зрение.",
+    attrs: [
+      { a: "Бренд", v: "HUAWEI", c: 0.99, step: "rules", ev: [["title", "HUAWEI"]] },
+      { a: "Процессор", v: "Intel Core i5 13420H", raw: "Intel Core i5 13420H частотой 2,1 ГГц", c: 0.88, step: "retr", ev: [["desc", "Intel Core i5 13420H"]] },
+      { a: "Оперативная память", v: "16 ГБ", raw: "16 Гб оперативной памяти", c: 0.95, step: "parse", ev: [["desc", "16 Гб оперативной памяти"], ["title", "i5/16/512GB"]] },
+      { a: "Накопитель", v: "SSD 512 ГБ", raw: "SSD объемом 512 Гб", c: 0.94, step: "parse", ev: [["desc", "SSD объемом 512 Гб"]] },
+      { a: "Диагональ экрана", v: "14″", raw: "диагональю 14 дюймов", c: 0.93, step: "parse", ev: [["desc", "диагональю 14 дюймов"]] },
+      { a: "Цвет", v: "серый/серебристый", raw: "космический серый · Space Gray", c: 0.72, step: "retr", ev: [["title", "космический серый"], ["desc", "Space Gray"]], review: "Маркетинговое название цвета. Retrieval выбрал ближайшее значение справочника, но уверенность ниже порога." }
+    ]
+  },
+  {
+    id: "401478255", cat: "Чехлы для смартфонов", catHow: "по заголовку", catConf: 0.90, seg: "без оффера", clicks: 0, tags: ["нет в фиде"],
+    title: "Чехол для смартфона, телефона UNIMALL -",
+    desc: "Чехол UNIMALL для Honor 100 Pro.\n\nХарактеристики:\n• Материал: искусственная кожа\n• Цвет: light brown\n• Стиль: накладка\n• Совместимость: Honor 100 Pro\n• Особенности: противоударный, защита камеры\n• Тип застежки: без застежки\n• Производитель телефона: Honor\n• Страна происхождения: Китай",
+    attrs: [
+      { a: "Бренд", v: "UNIMALL", c: 0.86, step: "rules", ev: [["title", "UNIMALL"], ["desc", "Чехол UNIMALL"]] },
+      { a: "Совместимость", v: "Honor 100 Pro", raw: "Совместимость: Honor 100 Pro", c: 0.95, step: "parse", ev: [["desc", "Совместимость: Honor 100 Pro"]] },
+      { a: "Материал", v: "искусственная кожа", raw: "Материал: искусственная кожа", c: 0.95, step: "parse", ev: [["desc", "Материал: искусственная кожа"]] },
+      { a: "Тип чехла", v: "накладка", raw: "Стиль: накладка", c: 0.90, step: "parse", ev: [["desc", "Стиль: накладка"]] },
+      { a: "Цвет", v: "коричневый", raw: "Цвет: light brown", c: 0.68, step: "llm", ev: [["desc", "Цвет: light brown"]], review: "Значение на английском. LLM выбрала значение из справочника, проверка по тексту пройдена после словаря синонимов." }
+    ]
+  }
+];
+
+const COLOR_OPTIONS = ["серый/серебристый", "серый", "серебристый", "графитовый", "коричневый", "бежевый", "золотой", "черный"];
+let QUEUE = [];
+CARDS.forEach(card => card.attrs.forEach(at => {
+  if (at.c !== null && at.c < THRESHOLD) QUEUE.push({ card, at, state: null });
+}));
+QUEUE.sort((x, y) => y.card.clicks - x.card.clicks);
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const fmtInt = n => n.toLocaleString("ru-RU");
+const fmtConf = c => c.toFixed(2).replace(".", ",");
+
+function highlight(text, field, attrs) {
+  const ranges = [];
+  attrs.forEach((at, i) => at.ev.forEach(([f, s]) => {
+    if (f !== field) return;
+    const k = text.indexOf(s);
+    if (k >= 0) ranges.push([k, k + s.length, i, STEP[at.step].cls]);
+  }));
+  ranges.sort((a, b) => a[0] - b[0]);
+  let out = "", pos = 0;
+  for (const [s, e, i, cls] of ranges) {
+    if (s < pos) continue;
+    out += esc(text.slice(pos, s)) + `<mark class="${cls}" data-i="${i}">${esc(text.slice(s, e))}</mark>`;
+    pos = e;
+  }
+  return out + esc(text.slice(pos));
+}
+
+function statusOf(at) {
+  if (at.c === null) return `<span class="status st-none"><span class="dot"></span>пусто</span>`;
+  return at.c >= THRESHOLD
+    ? `<span class="status st-ok"><span class="dot"></span>в каталог</span>`
+    : `<span class="status st-rev"><span class="dot"></span>на проверку</span>`;
+}
+function confCell(at) {
+  if (at.c === null) return `<span class="raw">нет</span>`;
+  const col = at.c >= THRESHOLD ? "var(--good)" : "var(--warn)";
+  return `<div class="conf"><div class="bar" aria-hidden="true"><i style="width:${at.c * 100}%;background:${col}"></i></div><span class="num">${fmtConf(at.c)}</span></div>`;
+}
+
+function renderCardList(activeId) {
+  $("#cardlist").innerHTML = CARDS.map(c => `
+    <button aria-pressed="${c.id === activeId}" data-id="${c.id}">
+      <span class="t">${esc(c.title)}</span>
+      <span class="chips"><span class="chip">${esc(c.cat)}</span>${c.tags.map(t => `<span class="chip ${t === "новый" ? "" : "warn"}">${esc(t)}</span>`).join("")}</span>
+    </button>`).join("");
+  $("#cardlist").querySelectorAll("button").forEach(b => b.addEventListener("click", () => showCard(b.dataset.id)));
+}
+
+function showCard(id) {
+  const c = CARDS.find(x => x.id === id);
+  renderCardList(id);
+  const ok = c.attrs.filter(a => a.c !== null && a.c >= THRESHOLD).length;
+  const rev = c.attrs.filter(a => a.c !== null && a.c < THRESHOLD).length;
+  const empty = c.attrs.filter(a => a.c === null).length;
+  const usedSteps = [...new Set(c.attrs.map(a => a.step))];
+  $("#detail").innerHTML = `
+    <div class="panel source-text">
+      <div class="meta">
+        <span>SKU <b class="num">${c.id}</b></span>
+        <span>Категория <b>${esc(c.cat)}</b> ${c.catHow === "из фида" ? `<span class="chip">из фида</span>` : `<span class="chip acc">по заголовку · ${fmtConf(c.catConf)}</span>`}</span>
+        <span>Продавец <b>${esc(c.seg)}</b></span>
+        <span>Клики в поиске <b class="num">${c.clicks ? fmtInt(c.clicks) : "нет"}</b></span>
+      </div>
+      <div class="label">Заголовок</div>
+      <div class="title-text" id="t-title">${highlight(c.title, "title", c.attrs)}</div>
+      <div class="label">Описание</div>
+      <div class="desc-text" id="t-desc">${highlight(c.desc, "desc", c.attrs)}</div>
+      <div class="legend">${usedSteps.map(s => `<span class="step"><span class="sw ${STEP[s].cls}"></span>${STEP[s].name}</span>`).join("")}</div>
+    </div>
+    <div class="panel">
+      <div class="toolbar" style="margin-bottom:8px">
+        <h2>Извлечённые атрибуты</h2>
+        <div class="sub num">${ok} в каталог · ${rev} на проверку · ${empty} пусто</div>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Атрибут</th><th>Значение</th><th>Уверенность</th><th>Шаг каскада</th><th>Решение</th></tr></thead>
+        <tbody>${c.attrs.map((at, i) => `
+          <tr class="attr-row" data-i="${i}">
+            <td>${esc(at.a)}</td>
+            <td><div class="val">${at.v ? esc(at.v) : `<span class="empty">не заполнено</span>`}</div>${at.raw ? `<div class="raw">${esc(at.raw)}</div>` : ""}</td>
+            <td>${confCell(at)}</td>
+            <td><span class="step"><span class="sw ${STEP[at.step].cls}"></span>${STEP[at.step].name}</span></td>
+            <td>${statusOf(at)}</td>
+          </tr>`).join("")}
+        </tbody></table></div>
+      <div class="foot" style="margin-top:8px">Наведите на строку, чтобы подсветить фрагмент текста, на котором основано значение. Черта на шкале уверенности — порог 0,75.</div>
+    </div>`;
+  document.querySelectorAll("#detail tr.attr-row").forEach(tr => {
+    const on = v => {
+      tr.classList.toggle("on", v);
+      document.querySelectorAll(`#detail mark[data-i="${tr.dataset.i}"]`).forEach(m => m.classList.toggle("lit", v));
+    };
+    tr.addEventListener("mouseenter", () => on(true));
+    tr.addEventListener("mouseleave", () => on(false));
+  });
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 4200);
+}
+
+function renderQueue() {
+  const open = QUEUE.filter(q => !q.state).length;
+  $("#qcount").textContent = open;
+  $("#qstat").textContent = `открыто ${open} из ${QUEUE.length}`;
+  $("#queue").innerHTML = QUEUE.map((q, k) => {
+    const { card, at } = q;
+    const head = `<div class="qhead"><span class="attr">${esc(at.a)}</span><span class="prod">${esc(card.title)}</span></div>`;
+    if (q.state) return `<div class="panel">${head}<div class="resolved" style="margin-top:6px"><span>✓</span><span>${esc(q.state)}</span></div></div>`;
+    const isColor = at.a === "Цвет";
+    return `<div class="panel qitem">
+      <div>
+        ${head}
+        <div class="cand">
+          <span>Кандидат <span class="val">${esc(at.v)}</span></span>
+          ${confCell(at)}
+          <span class="step"><span class="sw ${STEP[at.step].cls}"></span>${STEP[at.step].name}</span>
+          <span class="raw">клики: <span class="num">${card.clicks ? fmtInt(card.clicks) : "нет"}</span></span>
+        </div>
+        <div class="raw" style="margin-top:2px">${esc(at.raw || "")}</div>
+        <div class="why" style="margin-top:4px">${esc(at.review || "")}</div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" data-k="${k}" data-act="accept">Принять</button>
+        ${isColor ? `<select id="fix-${k}" data-k="${k}" aria-label="Исправить значение на">${COLOR_OPTIONS.map(o => `<option${o === at.v ? " selected" : ""}>${o}</option>`).join("")}</select><button class="btn" data-k="${k}" data-act="fix">Исправить</button>` : ""}
+        <button class="btn" data-k="${k}" data-act="absent">Нет в тексте</button>
+      </div>
+    </div>`;
+  }).join("");
+  $("#queue").querySelectorAll("button[data-act]").forEach(b => b.addEventListener("click", () => resolve(+b.dataset.k, b.dataset.act)));
+}
+
+function resolve(k, act) {
+  const q = QUEUE[k], at = q.at, raw = (at.ev[0] && at.ev[0][1]) || "";
+  const src = raw.replace(/^Цвет:\s*/, "");
+  if (act === "accept") {
+    q.state = `Принято: ${at.v}.`;
+    toast(at.step === "none" ? `Принято значение из карточки той же модели. Оно сохраняется с пометкой источника и не входит в основную метрику.` : `Синоним «${src}» → «${at.v}» добавлен в словарь и индекс retrieval.`);
+  } else if (act === "fix") {
+    const v = document.getElementById(`fix-${k}`).value;
+    q.state = `Исправлено на «${v}».`;
+    toast(`Исправление «${src}» → «${v}» добавлено в словарь. Пример попадёт в дообучение retrieval.`);
+  } else {
+    q.state = "Отмечено: значения нет в тексте, поле остаётся пустым.";
+    toast("Поле останется пустым. Случай учтён при подборе порогов для этого атрибута.");
+  }
+  renderQueue();
+}
+
+/* экран 3: данные из EDA, раздел 7 */
+const PLACES = [
+  { key: "title", name: "в заголовке", step: "Правила и regex", cls: "k-rules", color: "var(--s1)" },
+  { key: "desc", name: "только в описании", step: "Парсер описания", cls: "k-parse", color: "var(--s2)" },
+  { key: "syn", name: "после словаря синонимов", step: "Словарь и retrieval", cls: "k-retr", color: "var(--s3)" },
+  { key: "part", name: "частично", step: "Retrieval или LLM", cls: "k-llm", color: "var(--s4)" },
+  { key: "none", name: "нет в тексте", step: "Пусто или ручная проверка", cls: "k-none", color: "var(--s-none)" }
+];
+const CAT = {
+  phones: {
+    facts: [
+      ["7 988", "офферов в категории"],
+      ["94–97%", "заполненность обязательных полей в фиде"],
+      ["37%", "восстановленных и уценённых в выборке"],
+      ["100% / 24%", "диагональ нет в тексте: восстановленные / новые"]
+    ],
+    rows: [
+      ["Бренд", [99, 0, 0, 0, 1]], ["Объём памяти", [98, 1, 0, 0, 1]], ["Модель", [53, 2, 0, 4, 41]],
+      ["Цвет", [36, 5, 43, 1, 16]], ["Диагональ", [0, 48, 0, 0, 52]], ["Батарея", [0, 49, 0, 0, 51]]
+    ]
+  },
+  laptops: {
+    facts: [
+      ["3 580", "офферов в категории"],
+      ["80–100%", "заполненность обязательных полей в фиде"],
+      ["12%", "восстановленных и уценённых в выборке"],
+      ["30% / 7%", "диагональ нет в тексте: восстановленные / новые"]
+    ],
+    rows: [
+      ["Бренд", [100, 0, 0, 0, 0]], ["Оперативная память", [85, 12, 0, 0, 3]], ["Диагональ", [67, 23, 0, 0, 10]],
+      ["Накопитель", [7, 54, 1, 33, 5]], ["Процессор", [9, 27, 1, 58, 5]], ["Цвет", [35, 14, 15, 4, 32]]
+    ]
+  }
+};
+
+function renderCat(which) {
+  const d = CAT[which];
+  $("#c-phones").setAttribute("aria-pressed", which === "phones");
+  $("#c-laptops").setAttribute("aria-pressed", which === "laptops");
+  $("#facts").innerHTML = d.facts.map(([n, c]) => `<div class="fact"><span class="big">${n}</span><span class="cap">${c}</span></div>`).join("");
+  $("#legend").innerHTML = PLACES.map(p => `<span class="step"><span class="sw ${p.cls}"></span>${p.name}</span>`).join("");
+  const chart = $("#chart");
+  chart.innerHTML = d.rows.map(([name, v]) => {
+    const tot = v.reduce((a, b) => a + b, 0);
+    return `<div class="crow"><div class="name">${name}</div><div class="stack" role="img" aria-label="${name}: ${PLACES.map((p, i) => `${p.name} ${v[i]}%`).join(", ")}">${
+      v.map((x, i) => x > 0 ? `<span style="flex:${x / tot};background:${PLACES[i].color}" data-tip="<b>${x}%</b> ${PLACES[i].name} · ${PLACES[i].step}"></span>` : "").join("")
+    }</div></div>`;
+  }).join("") + `<div class="axis"><div></div><div><span>0%</span><span>50%</span><span>100%</span></div></div><div class="tip" id="tip" hidden></div>`;
+  const tip = $("#tip");
+  chart.querySelectorAll(".stack span").forEach(s => {
+    s.addEventListener("mousemove", e => {
+      const r = chart.getBoundingClientRect();
+      tip.innerHTML = s.dataset.tip; tip.hidden = false;
+      const x = Math.min(e.clientX - r.left + 12, r.width - tip.offsetWidth - 4);
+      tip.style.left = Math.max(0, x) + "px"; tip.style.top = (e.clientY - r.top + 14) + "px";
+    });
+    s.addEventListener("mouseleave", () => { tip.hidden = true; });
+  });
+  $("#ctable").innerHTML = `<table><thead><tr><th>Атрибут</th>${PLACES.map(p => `<th>${p.name}</th>`).join("")}</tr></thead><tbody>${
+    d.rows.map(([n, v]) => `<tr><td>${n}</td>${v.map(x => `<td class="num">${x}%</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  $("#flow").innerHTML = PLACES.map(p => `<div><span class="step"><span class="sw ${p.cls}"></span>${p.name}</span><p>${p.step}</p></div>`).join("");
+}
+
+/* вкладки */
+const TABS = [["tab-card", "pane-card"], ["tab-queue", "pane-queue"], ["tab-cat", "pane-cat"]];
+function openTab(id) {
+  TABS.forEach(([t, p]) => {
+    const on = t === id;
+    document.getElementById(t).setAttribute("aria-selected", on);
+    document.getElementById(p).hidden = !on;
+  });
+  try { localStorage.setItem("attr-tab", id); } catch (e) {}
+}
+TABS.forEach(([t]) => document.getElementById(t).addEventListener("click", () => openTab(t)));
+$("#c-phones").addEventListener("click", () => renderCat("phones"));
+$("#c-laptops").addEventListener("click", () => renderCat("laptops"));
+
+showCard(CARDS[0].id);
+renderQueue();
+renderCat("phones");
+let saved = null;
+try { saved = localStorage.getItem("attr-tab"); } catch (e) {}
+const hash = location.hash.replace("#", "");
+const byHash = { card: "tab-card", queue: "tab-queue", category: "tab-cat" }[hash];
+openTab(byHash || (TABS.some(([t]) => t === saved) ? saved : "tab-card"));
+</script>

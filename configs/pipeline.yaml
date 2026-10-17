@@ -1,0 +1,32 @@
+# Параметры пайплайна. Пороги здесь — стартовые значения; калибровка (b2) перезаписывает их по атрибутам.
+
+schema:
+  required_fill_rate: 0.70     # фасет обязательный, если заполнен у ≥ 70% офферов категории (EDA, раздел 5)
+  min_offers_for_own_schema: 50  # меньше — схема наследуется от родительской категории
+
+confidence:
+  accept_threshold: 0.75       # выше — в каталог, ниже — дальше по каскаду или на ручную проверку
+  category_min_conf: 0.60      # ниже — извлекаем только сквозные атрибуты (scope: global)
+
+# LLM и эмбеддинги — API платформы хакатона (OpenAI-совместимый). Адрес и ключ берутся из окружения ВМ:
+# OPENAI_BASE_URL / OPENAI_API_KEY (их же читает клиент openai). В конфиг и в git ключи не кладём.
+# Цены в рублях за 1 тыс. токенов на 2026-10-17 (GET $OPENAI_BASE_URL/models).
+llm:
+  enabled: false
+  model: ai-sage/GigaChat3-10B-A1.8B     # 0.0122 вход / 0.0122 выход
+  fallback_model: openai/gpt-oss-120b    # 0.0159 / 0.061 — для конфликтов и сложных случаев
+  max_cards_per_call: 6
+  self_consistency_samples: 3
+  budget_rub: 0                # жёсткий лимит на прогон; 0 — вызовы запрещены
+
+embeddings:
+  backend: api                 # api — модель платформы; local — sentence-transformers на CPU ВМ
+  model: BAAI/bge-m3           # 0.00061 за 1 тыс. токенов
+  local_model: intfloat/multilingual-e5-small
+  batch_size: 64
+  budget_rub: 0
+
+split:
+  seed: 42
+  test_share: 0.2
+  holdout_category_share: 0.1  # категории, целиком отложенные как «новые»
