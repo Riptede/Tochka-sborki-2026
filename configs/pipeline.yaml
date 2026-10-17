@@ -29,4 +29,5 @@ embeddings:
 split:
   seed: 42
   test_share: 0.2
+  valid_share: 0.1
   holdout_category_share: 0.1  # категории, целиком отложенные как «новые»

@@ -30,8 +30,12 @@ data/raw/query_clicks.parquet
 
 ```
 uv run pytest                                              # проверка окружения и конфигов
+uv run python scripts/build_db.py                          # сборка БД data/attrex.duckdb (≈3 мин, ≈3 ГБ RAM)
 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb
 ```
+
+`build_db.py` при первом запуске разбирает `skus.pkl` потоково (≈10 минут) и кэширует результат в `data/interim/`;
+следующие сборки берут кэш. Флаг `--reparse` разбирает фид заново.
 
 Первый прогон EDA занимает около 15 минут и укладывается в 3 ГБ памяти. При 16 ГБ памяти и больше можно задать
 `EDA_FAST_PICKLE=1`, тогда `skus.pkl` загрузится целиком за минуту. На ВМ хакатона (7,8 ГБ) этот режим не включайте.
