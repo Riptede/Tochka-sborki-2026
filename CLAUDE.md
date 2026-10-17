@@ -50,6 +50,9 @@ pred_predictions, outputs/predictions.* (b4) → очередь проверки
   `normalize/grounding.py` (b2): сравнение после нормализации единиц и синонимов, а не по строке. LLM использует её же.
 - Нормализация значения к канону (`units.py`, словари) — общая библиотека b2; b3 не пишет свою.
 - Шаги можно отключать флагом прогона: так строится ablation-таблица (правила → + парсер → + retrieval → + LLM).
+  Список шагов и их модули — раздел `cascade` в `configs/pipeline.yaml`; новый шаг подключается строкой там.
+- Прогон с `--hide-category` прячет категорию из БД: офферы идут как карточки без оффера — так оцениваем шаг 0
+  и весь каскад для 79% карточек без эталона.
 
 ## Структура репозитория
 
@@ -62,7 +65,8 @@ src/attrex/registry.py    загрузка реестра атрибутов
 src/attrex/contracts.py   Card, CategorySchema, Candidate, Extractor, Prediction, перечисления Step/Source/Status
 src/attrex/db/schema.sql  схема DuckDB
 src/attrex/<блок>/        код блока (модули — в схеме каскада выше)
-src/attrex/pipeline.py    оркестратор каскада (b4)
+src/attrex/pipeline.py    оркестратор каскада (b4): шаги — из раздела cascade в configs/pipeline.yaml
+src/attrex/runs.py        прогон (b4): карточки из БД → outputs/<run_id>/ → pred_predictions, pred_runs; файл сдачи
 scripts/build_db.py       b1: data/raw → data/attrex.duckdb (raw_*, core_*)
 scripts/run_pipeline.py   b4: прогон каскада → pred_predictions; флаги --run-id, --steps, --limit, --category
 scripts/evaluate.py       b4: метрики и ablation по run_id → outputs/<run_id>/report.md
@@ -214,7 +218,7 @@ git push                        # сдача: из ~/project на ВМ в Gitea
 |---|---|---|
 | 1 | b1 | ✅ `scripts/build_db.py`: raw_* и core_cards, core_gold, core_attr_name_map, core_category_schema, core_ref_values, core_splits. Дальше: `core_gold.in_text` (где лежит значение) и веса трафика v1 |
 | 2 | b2 | правила + единицы + парсер «ключ: значение»; базлайн predictions только на правилах. Правила — ветка `b2/rules-baseline` |
-| 3 | b4 | метрики и ablation-таблица для базлайна; формат файла сдачи |
+| 3 | b4 | метрики и ablation-таблица для базлайна; формат файла сдачи. Ветка `b4/pipeline-baseline` |
 | 4 | b2 | шаг 0 (категория), retrieval на bge-m3 через API (запасной вариант — e5-small на CPU), калибровка уверенности |
 | 5 | b3 | LLM-шаг на остатке с бюджетом; вклад в ablation |
 | 6 | b5 | очередь проверки на реальных predictions, возврат решений в словари; прототип → рабочий интерфейс |
