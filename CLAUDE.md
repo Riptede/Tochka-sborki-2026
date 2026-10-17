@@ -219,7 +219,7 @@ git push                        # сдача: из ~/project на ВМ в Gitea
 | 1 | b1 | ✅ `scripts/build_db.py`: raw_* и core_cards, core_gold, core_attr_name_map, core_category_schema, core_ref_values, core_splits. Дальше: `core_gold.in_text` (где лежит значение) и веса трафика v1 |
 | 2 | b2 | правила + единицы + парсер «ключ: значение»; базлайн predictions только на правилах. Правила — ветка `b2/rules-baseline` |
 | 3 | b4 | метрики и ablation-таблица для базлайна; формат файла сдачи. Ветка `b4/pipeline-baseline` |
-| 4 | b2 | шаг 0 (категория), retrieval на bge-m3 через API (запасной вариант — e5-small на CPU), калибровка уверенности. Шаг 0 — ветка `b2/category-baseline` |
+| 4 | b2 | шаг 0 (категория), retrieval на bge-m3 через API (запасной вариант — e5-small на CPU), калибровка уверенности. Шаг 0 — ветка `b2/category-baseline`, retrieval (триграммы, Encoder под эмбеддинги) — `b2/retrieval-baseline` |
 | 5 | b3 | LLM-шаг на остатке с бюджетом; вклад в ablation |
 | 6 | b5 | очередь проверки на реальных predictions, возврат решений в словари; прототип → рабочий интерфейс |
 | 7 | все | README по шагам запуска, презентация с цифрами из прогона |

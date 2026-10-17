@@ -87,6 +87,8 @@ class ValueNormalizer:
 
 
 def _contains_words(text_key: str, value_key: str) -> bool:
-    """Все слова значения есть во фрагменте; порядок слов не важен."""
+    """Все слова значения есть во фрагменте; порядок слов не важен, части через дефис — тоже слова
+    («темно-серый» подтверждает «серый»)."""
     words = set(text_key.split())
+    words |= {part for w in words if "-" in w for part in w.split("-")}
     return bool(value_key) and all(w in words for w in value_key.split())

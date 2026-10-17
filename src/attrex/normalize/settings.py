@@ -37,6 +37,7 @@ class NormalizeSettings:
     compat_words: frozenset[str] = frozenset()
     scores: Scores = Scores()
     parse: ParseSettings = ParseSettings()
+    retrieval: dict = field(default_factory=dict)     # разбирает normalize/retrieval.py: RetrievalSettings
     min_prefix_count: int = 3
     max_brand_offset: int = 2
     dims_min_support: int = 5
@@ -65,6 +66,7 @@ def parse_settings(cfg: dict) -> NormalizeSettings:
         compat_words=frozenset(_folded(cfg.get("compat_words"))),
         scores=Scores(**cfg.get("scores", {})),
         parse=ParseSettings(**cfg.get("parse", {})),
+        retrieval=dict(cfg.get("retrieval", {})),
         min_prefix_count=int(layout.get("min_prefix_count", 3)),
         max_brand_offset=int(layout.get("max_brand_offset", 2)),
         dims_min_support=int(dims.get("min_support", 5)),

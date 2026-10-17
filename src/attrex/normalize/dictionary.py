@@ -101,6 +101,13 @@ class RefDictionary:
     def values(self, attr_id: str) -> set[str]:
         return {m.value for m in self._exact.get(attr_id, {}).values()}
 
+    def value_support(self, attr_id: str) -> dict[str, int]:
+        """Канон → сколько голосов эталона за него (по всем написаниям)."""
+        out: dict[str, int] = defaultdict(int)
+        for m in self._exact.get(attr_id, {}).values():
+            out[m.value] += round(m.support * m.score)
+        return dict(out)
+
     def lookup(self, attr_id: str, text: str) -> DictMatch | None:
         """Значение целиком — написание из справочника (без поиска внутри текста)."""
         return self._match(attr_id, phrase_key(text).split())
