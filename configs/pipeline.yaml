@@ -9,7 +9,7 @@ cascade:
 # Шаг 0 — категория карточки: модуль с build(ctx) -> resolve(card) -> Card. null — только категория из БД
 # (фид или клики); карточки без неё получают схему из сквозных атрибутов schema.fallback_required.
 category:
-  resolver: null
+  resolver: attrex.category.classifier     # категория из БД, иначе — по первым словам заголовка
 
 # Из эталона каких фолдов строятся словари, раскладки и выученные алиасы. test и holdout_category — никогда.
 knowledge_folds: [train]
