@@ -21,19 +21,32 @@ import yaml
 GLOBAL = "*"
 
 
-def isotonic(x: Sequence[float], y: Sequence[float]) -> tuple[list[float], list[float]]:
-    """Неубывающая ступенчатая функция по точкам (x, y): pool adjacent violators. Возвращает центры блоков и уровни."""
+def isotonic(x: Sequence[float], y: Sequence[float], w: Sequence[float] | None = None
+             ) -> tuple[list[float], list[float]]:
+    """Неубывающая ступенчатая функция по точкам (x, y) с весами: pool adjacent violators.
+
+    Возвращает центры блоков и уровни; соседние блоки с одним уровнем сливаются.
+    """
     order = np.argsort(x, kind="stable")
     xs, ys = np.asarray(x, float)[order], np.asarray(y, float)[order]
-    blocks: list[list[float]] = []          # [сумма y, вес, сумма x]
-    for xv, yv in zip(xs, ys):
-        blocks.append([yv, 1.0, xv])
-        while len(blocks) > 1 and blocks[-2][0] / blocks[-2][1] > blocks[-1][0] / blocks[-1][1]:
+    ws = np.ones(len(xs)) if w is None else np.asarray(w, float)[order]
+    blocks: list[list[float]] = []          # [сумма w·y, сумма w, сумма w·x]
+    for xv, yv, wv in zip(xs, ys, ws):
+        blocks.append([wv * yv, wv, wv * xv])
+        while len(blocks) > 1 and blocks[-2][0] / blocks[-2][1] >= blocks[-1][0] / blocks[-1][1]:
             y2, w2, x2 = blocks.pop()
             blocks[-1][0] += y2
             blocks[-1][1] += w2
             blocks[-1][2] += x2
     return [float(b[2] / b[1]) for b in blocks], [float(b[0] / b[1]) for b in blocks]
+
+
+def quantile_bins(x: Sequence[float], y: Sequence[float], bins: int) -> tuple[list[float], list[float], list[int]]:
+    """Средние x и y по bins группам с равным числом точек: изотоника по бинам устойчивее, чем по точкам."""
+    order = np.argsort(x, kind="stable")
+    xs, ys = np.asarray(x, float)[order], np.asarray(y, float)[order]
+    parts = [p for p in np.array_split(np.arange(len(xs)), min(bins, len(xs))) if len(p)]
+    return [float(xs[p].mean()) for p in parts], [float(ys[p].mean()) for p in parts], [len(p) for p in parts]
 
 
 @dataclass(frozen=True)
@@ -46,8 +59,9 @@ class Curve:
         return float(np.interp(raw, self.xs, self.ys))
 
     @classmethod
-    def fit(cls, raw: Sequence[float], correct: Sequence[bool]) -> "Curve":
-        xs, ys = isotonic(raw, [float(c) for c in correct])
+    def fit(cls, raw: Sequence[float], correct: Sequence[bool], bins: int = 20) -> "Curve":
+        bx, by, bw = quantile_bins(raw, [float(c) for c in correct], bins)
+        xs, ys = isotonic(bx, by, bw)
         return cls(tuple(round(v, 4) for v in xs), tuple(round(v, 4) for v in ys), len(raw))
 
     def __post_init__(self):

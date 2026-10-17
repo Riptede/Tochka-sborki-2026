@@ -9,6 +9,17 @@ def test_isotonic_is_monotone_and_pools_violators():
     xs, ys = isotonic([0.1, 0.2, 0.3, 0.4], [0, 1, 0, 1])
     assert ys == sorted(ys)
     assert ys == [0.0, 0.5, 1.0] and xs == pytest.approx([0.1, 0.25, 0.4])
+    xs, ys = isotonic([0.1, 0.2, 0.3], [1, 1, 1])
+    assert ys == [1.0] and xs == pytest.approx([0.2])                     # одинаковые уровни сливаются
+    assert isotonic([0.1, 0.2], [1, 0], w=[3, 1])[1] == [0.75]
+
+
+def test_curve_is_compact_on_many_points():
+    rng = np.random.default_rng(1)
+    raw = rng.random(5000)
+    curve = Curve.fit(raw, rng.random(5000) < raw)                      # вероятность верного = сырой скор
+    assert len(curve.xs) <= 20 and curve.n == 5000
+    assert curve(0.9) > curve(0.1) and abs(curve(0.5) - 0.5) < 0.1
 
 
 def test_curve_interpolates_and_clips():
