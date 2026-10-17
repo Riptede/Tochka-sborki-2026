@@ -1,0 +1,24 @@
+# данные организатора и всё, что из них строится: в git не кладём
+data/
+outputs/*
+!outputs/.gitkeep
+*.duckdb
+*.duckdb.wal
+
+# кэш LLM и моделей
+.cache/
+models/
+
+# окружение
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# локальные настройки и секреты
+.env
+.claude/settings.local.json
+.vscode/
+.idea/

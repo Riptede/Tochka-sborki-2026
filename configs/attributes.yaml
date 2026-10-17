@@ -1,0 +1,125 @@
+# Реестр атрибутов: единственный источник attr_id для всего проекта.
+# attr_id используется в БД, в predictions, в метриках и в промптах LLM. Новый атрибут добавляем сюда, а не в код.
+#
+# kind:   number   — число в канонической единице (unit), сравниваем как число
+#         category — значение из справочника core_ref_values
+#         text     — свободная строка без справочника (модель, артикул)
+# multi:  атрибут может иметь несколько значений в одной карточке (метрика — F1 по множеству)
+# feed:   где лежит эталон в фиде skus.pkl
+#         field  — поле оффера (vendor, model)
+#         facet  — значение для фильтров на витрине: канон, к которому нормализуем
+#         search — сырые поля «…_search»: то, что извлекаем. Единица часто лежит в @unit, а не в значении
+# scope:  global — сквозной атрибут любой категории; иначе список category_id, где он обязательный по ТЗ
+
+attributes:
+  brand:
+    name_ru: Бренд
+    kind: category
+    feed: {field: vendor}
+    scope: global
+
+  model:
+    name_ru: Модель
+    kind: text
+    feed: {field: model, search: ["Модель_search"]}
+    scope: global
+
+  color:
+    name_ru: Цвет
+    kind: category
+    feed: {facet: ["Цвет"], search: ["Цвет_search"]}
+    scope: global
+
+  condition:
+    name_ru: Состояние
+    kind: category
+    feed: {facet: ["Состояние"], search: ["Состояние_search"]}
+    scope: global
+
+  storage:
+    name_ru: Объём встроенной памяти
+    kind: number
+    unit: GB
+    feed: {facet: ["Встроенная память"], search: ["Встроенная память (ROM)_search"]}
+    scope: [761]
+
+  ram:
+    name_ru: Оперативная память
+    kind: number
+    unit: GB
+    multi: true
+    feed: {facet: ["Оперативная память"], search: ["Оперативная память (RAM)_search"]}
+    scope: [987]
+
+  screen_diag:
+    name_ru: Диагональ экрана
+    kind: number
+    unit: in
+    multi: true
+    feed: {facet: ["Диагональ экрана"], search: ["Диагональ_search", "Диагональ экрана_search"]}
+    scope: [761, 987]
+
+  battery:
+    name_ru: Ёмкость аккумулятора
+    kind: number
+    unit: mAh
+    feed: {facet: ["Емкость аккумулятора"], search: ["Емкость аккумулятора_search"]}
+    scope: [761]
+
+  cpu:
+    name_ru: Процессор
+    kind: category
+    feed: {search: ["Процессор_search"]}
+    scope: [987]
+
+  drive:
+    name_ru: Накопитель
+    kind: category
+    feed: {search: ["Общий объем накопителя_search"]}
+    scope: [987]
+
+  weight:
+    name_ru: Вес
+    kind: number
+    unit: kg
+    feed: {facet: ["Вес"], search: ["Вес_search"]}
+    scope: global
+
+  width:
+    name_ru: Ширина
+    kind: number
+    unit: cm
+    feed: {facet: ["Ширина"], search: ["Ширина_search"]}
+    scope: global
+
+  height:
+    name_ru: Высота
+    kind: number
+    unit: cm
+    feed: {facet: ["Высота"], search: ["Высота_search"]}
+    scope: global
+
+  depth:
+    name_ru: Глубина
+    kind: number
+    unit: cm
+    feed: {facet: ["Глубина"], search: ["Глубина_search"]}
+    scope: global
+
+  material:
+    name_ru: Материал
+    kind: category
+    multi: true
+    feed: {facet: ["Материал", "Материал корпуса"], search: ["Материал_search", "Материал корпуса_search"]}
+    scope: global
+
+# Категории, для которых в ТЗ есть явный список обязательных полей
+categories:
+  761: {name_ru: Смартфоны, required: [brand, model, storage, screen_diag, battery, color]}
+  987: {name_ru: Ноутбуки, required: [brand, cpu, ram, drive, screen_diag, color]}
+
+# Значения-заглушки: в эталоне это пропуск, а не значение (EDA, раздел 6.1)
+placeholders: ["другой", "другие", "другие цвета", "другой цвет", "0", "000", "-", "нет данных", "не установлена", "не указано"]
+
+# Служебные и маркетинговые поля фида: не атрибуты товара, в схему не попадают
+service_fields: ["Продавец", "Подборки", "Акции", "Потратить бонусы", "Топ коллекция", "ЗД для отчета BI/BO", "ЖД для отчета BI/BO", "Обяз. к предустановке ПО"]
