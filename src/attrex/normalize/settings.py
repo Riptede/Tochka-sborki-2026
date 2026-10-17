@@ -78,5 +78,12 @@ def parse_settings(cfg: dict) -> NormalizeSettings:
 
 @lru_cache(maxsize=1)
 def load_settings(path: str | None = None) -> NormalizeSettings:
+    """configs/normalize.yaml и синонимы из решений модераторов (review_synonyms, пишет b5); ручные — важнее."""
     with open(path or CONFIGS / "normalize.yaml", encoding="utf-8") as f:
-        return parse_settings(yaml.safe_load(f) or {})
+        cfg = yaml.safe_load(f) or {}
+    review = CONFIGS / cfg["review_synonyms"] if cfg.get("review_synonyms") else None
+    if review is not None and review.exists():
+        learned = (yaml.safe_load(review.read_text(encoding="utf-8")) or {}).get("synonyms") or {}
+        manual = cfg.get("synonyms") or {}
+        cfg["synonyms"] = {a: {**learned.get(a, {}), **manual.get(a, {})} for a in {*learned, *manual}}
+    return parse_settings(cfg)

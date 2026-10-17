@@ -47,8 +47,10 @@ inflected: [color, material, condition]
 # Написание продавца, которое не совпадает ни с одним каноном, попадает в справочник при стольких голосах эталона
 dictionary_min_support: 3
 
-# Ручные синонимы: написание → канон. Добавляются к голосам эталона с весом manual_weight
+# Ручные синонимы: написание → канон. Добавляются к голосам эталона с весом manual_weight.
+# Синонимы из решений модераторов (b5, attrex.review.feedback) — в review_synonyms; при конфликте ручные важнее.
 manual_weight: 20
+review_synonyms: review_synonyms.yaml
 synonyms:
   color:
     black: черный
