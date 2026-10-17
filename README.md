@@ -9,7 +9,8 @@
 
 ## Установка
 
-Нужны Python 3.11+ и [uv](https://docs.astral.sh/uv/).
+Нужен [uv](https://docs.astral.sh/uv/). Python 3.12 он скачает сам по файлу `.python-version`; системный Python
+не важен. Код поддерживает Python 3.11–3.13.
 
 ```
 uv sync --extra eda --extra llm

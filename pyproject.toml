@@ -3,7 +3,7 @@ name = "attrex"
 version = "0.1.0"
 description = "Извлечение и нормализация атрибутов товаров из текста карточки (кейс М.Видео, команда TushavinClub)"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"  # рабочая версия команды — 3.12 (.python-version)
 dependencies = [
     "numpy>=1.26",
     "pandas>=2.2",
