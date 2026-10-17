@@ -7,6 +7,7 @@ cascade:
   parse: attrex.normalize.kv_parser
   retrieval: attrex.normalize.retrieval
   llm: attrex.llm.extractor              # без llm.enabled, ключа и бюджета шаг ничего не делает
+  model_match: attrex.normalize.model_match   # значение из карточек той же модели — всегда на ручную проверку
 
 # Шаг 0 — категория карточки: модуль с build(ctx) -> resolve(card) -> Card. null — только категория из БД
 # (фид или клики); карточки без неё получают схему из сквозных атрибутов schema.fallback_required.
