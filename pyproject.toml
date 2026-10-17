@@ -17,8 +17,8 @@ dependencies = [
 eda = ["matplotlib>=3.8", "ipykernel>=6.29", "nbclient>=0.10", "nbformat>=5.10"]
 # b2: retrieval-нормализатор (e5-small на CPU)
 ml = ["sentence-transformers>=3.0", "faiss-cpu>=1.8"]
-# b3: клиент LLM. Провайдер выбираем отдельно, здесь только общий HTTP-клиент
-llm = ["httpx>=0.27"]
+# b3: LLM и эмбеддинги через OpenAI-совместимый API платформы
+llm = ["openai>=1.40"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]

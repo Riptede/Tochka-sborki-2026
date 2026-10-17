@@ -12,8 +12,10 @@
 Нужны Python 3.11+ и [uv](https://docs.astral.sh/uv/).
 
 ```
-uv sync --extra eda
+uv sync --extra eda --extra llm
 ```
+
+Для LLM и эмбеддингов нужны переменные окружения `OPENAI_BASE_URL` и `OPENAI_API_KEY` (на ВМ хакатона они уже заданы).
 
 Файлы организатора положите в `data/raw/`:
 
@@ -30,8 +32,8 @@ uv run pytest                                              # проверка о
 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb
 ```
 
-Первый прогон EDA занимает около 15 минут. При 16 ГБ памяти и больше задайте `EDA_FAST_PICKLE=1`, чтобы `skus.pkl`
-загрузился целиком за минуту.
+Первый прогон EDA занимает около 15 минут и укладывается в 3 ГБ памяти. При 16 ГБ памяти и больше можно задать
+`EDA_FAST_PICKLE=1`, тогда `skus.pkl` загрузится целиком за минуту. На ВМ хакатона (7,8 ГБ) этот режим не включайте.
 
 ## Структура
 
