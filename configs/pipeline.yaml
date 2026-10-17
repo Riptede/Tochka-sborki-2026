@@ -23,7 +23,8 @@ schema:
 confidence:
   accept_threshold: 0.75       # выше — в каталог, ниже — дальше по каскаду или на ручную проверку
   category_min_conf: 0.60      # ниже — извлекаем только сквозные атрибуты (scope: global)
-  thresholds: {}               # порог по атрибуту, если он отличается от accept_threshold (пишет калибровка)
+  thresholds: {}               # ручной порог по атрибуту: важнее порогов калибровки
+  calibration: calibration.yaml  # кривые и пороги калибровки (configs/, генерирует attrex.confidence.calibration)
   step_weights:                # насколько доверяем шагу при сложении подтверждений одного значения
     rules: 1.0
     parse: 1.0
