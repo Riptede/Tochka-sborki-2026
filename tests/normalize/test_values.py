@@ -22,6 +22,21 @@ def test_tie_does_not_depend_on_row_order():
     assert a == b == "серый"
 
 
+def test_canon_filters_drop_noisy_color_canons():
+    from attrex.normalize.resources import NormalizeResources
+
+    rows = [("color", "черный", "черный", 50), ("color", "серый", "серый", 40), ("material", "стекло", "стекло", 300),
+            ("color", "стекло", "стекло", 30), ("color", "стекло", "прозрачный", 9),     # в эталоне чаще материал
+            ("color", "матовый", "матовый", 40), ("color", "матовый", "черный", 9),      # отделка из exclude
+            ("color", "мокрый асфальт", "мокрый асфальт", 5), ("color", "мокрый асфальт", "серый", 4)]   # редкий
+    d = NormalizeResources.from_rows(rows, filter_canons=True).dictionary
+    assert d.lookup("color", "Черный").value == "черный"
+    assert d.lookup("color", "стекло") is None and d.lookup("color", "матовый") is None   # не цвет — и как написание
+    assert d.lookup("color", "мокрый асфальт").value == "серый"     # редкий канон ушёл, написание голосует за другой
+    assert d.lookup("material", "стекло").value == "стекло"           # у материала канон остаётся
+    assert NormalizeResources.from_rows(rows).dictionary.lookup("color", "матовый").value == "матовый"  # фикстуры
+
+
 def test_dictionary_find_longest_match(res):
     text = fold("Цвет: небесно-голубой, вставки Titanium Grey")
     found = [(m.value, text[m.start:m.end]) for m in res.dictionary.find("color", tokenize(text))]
