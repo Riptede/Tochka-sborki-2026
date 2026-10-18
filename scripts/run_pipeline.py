@@ -16,6 +16,7 @@ import duckdb
 
 from attrex import paths
 from attrex.contracts import BuildContext
+from attrex.db import connect
 from attrex.pipeline import build_pipeline, load_config
 from attrex.runs import RunSpec, default_run_id, parse_steps, run, store
 
@@ -67,7 +68,7 @@ def main() -> None:
                    extra={"calibration": cfg["confidence"].get("calibration")})
 
     t0 = time.time()
-    con = duckdb.connect(str(a.db), read_only=True)
+    con = connect(a.db)
     try:
         pipeline = build_pipeline(BuildContext(con, cfg, knowledge), steps)
         print(f"[{time.time() - t0:5.0f} с] пайплайн: {' → '.join(pipeline.step_names)}")

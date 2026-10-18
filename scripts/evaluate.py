@@ -13,6 +13,7 @@ from pathlib import Path
 import duckdb
 
 from attrex import paths
+from attrex.db import connect
 from attrex.metrics.report import RunInfo, render
 from attrex.metrics.scoring import comparison_same, evaluate, load_outcomes
 
@@ -37,7 +38,7 @@ def main() -> None:
     folds = [f.strip() for f in a.folds.split(",") if f.strip()]
     same = comparison_same()
 
-    con = duckdb.connect(str(a.db), read_only=True)
+    con = connect(a.db)
     try:
         def measure(run_id: str):
             return run_info(con, run_id, folds), evaluate(load_outcomes(con, folds, same, run_id=run_id))
