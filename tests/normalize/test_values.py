@@ -13,6 +13,15 @@ def test_dictionary_lookup_synonyms_and_votes(res):
     assert d.lookup("cpu", "Core i5-13420H").value == "intel core i5-13420h 2.1 ггц"   # по ключу модели
 
 
+def test_tie_does_not_depend_on_row_order():
+    from attrex.normalize.dictionary import RefDictionary
+
+    rows = [("color", "графит", "серый", 3), ("color", "графит", "черный", 3)]
+    a = RefDictionary.from_rows(rows).lookup("color", "графит").value
+    b = RefDictionary.from_rows(rows[::-1]).lookup("color", "графит").value
+    assert a == b == "серый"
+
+
 def test_dictionary_find_longest_match(res):
     text = fold("Цвет: небесно-голубой, вставки Titanium Grey")
     found = [(m.value, text[m.start:m.end]) for m in res.dictionary.find("color", tokenize(text))]
