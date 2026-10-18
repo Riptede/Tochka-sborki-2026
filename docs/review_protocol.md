@@ -21,7 +21,15 @@
 uv run python -m attrex.review.queue --run-id <run_id> --limit 500
 ```
 
-Файл `outputs/<run_id>/review_queue.csv` открывается в Excel (UTF-8 с BOM). Колонки:
+Файл `outputs/<run_id>/review_queue.csv` открывается в Excel (UTF-8 с BOM). Удобнее — интерфейс модератора
+по той же очереди: карточка с подсвеченной цитатой, кнопки решений и подсказки справочника для `fix`.
+
+```
+uv run python -m attrex.review.app --run-id <run_id>      # outputs/<run_id>/review.html — открыть в браузере
+```
+
+Решения сохраняются в браузере; «Скачать решения» выгружает очередь с заполненными `decision` и `fixed_value` —
+её загружают шагом 3 так же, как файл из Excel. Колонки очереди:
 
 | Колонка | Что это |
 |---|---|

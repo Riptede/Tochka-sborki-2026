@@ -9,6 +9,7 @@
     demo/predictions.parquet|csv  файл предсказаний: строка на (карточка, обязательный атрибут), включая пустые
     demo/report.md                метрики на размеченной части выборки: P/R/F1 по атрибутам, срезы, вклад шагов
     demo/review_queue.csv         очередь ручной проверки: значения ниже порога, важные по трафику — первыми
+    demo/review.html              интерфейс модератора по этой очереди: открыть в браузере
 
 Режим одной карточки печатает по каждому обязательному атрибуту значение в каноне, уверенность, статус
 (accepted — в каталог, review — на проверку, empty — в тексте не найдено) и цитату из текста, которая его подтверждает.
@@ -26,6 +27,7 @@ from attrex.metrics.report import RunInfo, render
 from attrex.metrics.scoring import comparison_same, coverage, evaluate, load_outcomes
 from attrex.pipeline import build_pipeline, load_config
 from attrex.registry import load_registry
+from attrex.review.app import write_page
 from attrex.review.queue import build_queue, write_queue
 from attrex.runs import RunSpec, export, run, store
 
@@ -117,6 +119,7 @@ def demo_run() -> None:
         (OUT / RUN_ID / "report.md").write_text(render(info, metrics), encoding="utf-8")
         files = export(con, RUN_ID, OUT / RUN_ID)
         queue = write_queue(build_queue(con, RUN_ID), OUT / RUN_ID / "review_queue.csv")
+        app = write_page(queue, RUN_ID, OUT / RUN_ID / "review.html", con)
         show_cards(con)
     finally:
         con.close()
@@ -124,7 +127,7 @@ def demo_run() -> None:
     print()
     log("метрики на размеченной части выборки (valid, test, holdout_category): "
         + ", ".join(f"{k} {v:.1%}" for k, v in h.items()))
-    for p in [*files, OUT / RUN_ID / "report.md", queue]:
+    for p in [*files, OUT / RUN_ID / "report.md", queue, app]:
         print(f"       {p.relative_to(paths.ROOT)}")
 
 
