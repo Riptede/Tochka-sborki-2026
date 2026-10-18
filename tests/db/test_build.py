@@ -38,7 +38,7 @@ def test_gold_numbers_in_canonical_units(db):
 
 def test_gold_categories_and_placeholders(db):
     con, _ = db
-    assert gold(con, 30000001, "color") == [("черный", None, False)]   # фасет в каноне
+    assert gold(con, 30000001, "color") == [("серый", None, False), ("черный", None, False)]   # составной фасет
     assert gold(con, 400000002, "color") == [("мятный", None, False)]  # фасет-заглушка → сырое значение
     assert gold(con, 400000003, "color") == [(None, None, True)]       # только заглушка
     assert gold(con, 30000001, "brand") == [("samsung", None, False)]
@@ -77,3 +77,17 @@ def test_ref_values_and_splits(db):
     assert "черный" in colors and "мятный" in colors
     folds = {f for (f,) in con.execute("SELECT fold FROM core_splits").fetchall()}
     assert folds <= {"train", "valid", "test", "holdout_category"}
+
+
+def test_gold_in_text(db):
+    con, _ = db
+    where = {(s, a, v): w for s, a, v, w in con.execute(
+        "SELECT sku_id, attr_id, value, in_text FROM core_gold WHERE value IS NOT NULL").fetchall()}
+    assert where[(30000001, "storage", "256")] == "title"          # «8/256GB»
+    assert where[(30000001, "battery", "4000")] == "description"   # «4000 мА*ч»
+    assert where[(30000001, "screen_diag", "6.2")] == "description"
+    assert where[(30000001, "color", "черный")] == "title"
+    assert where[(30000001, "color", "серый")] == "none"           # часть составного фасета, в тексте её нет
+    assert where[(400000002, "storage", "1024")] == "title"        # «1TB» в гигабайтах
+    assert where[(400000002, "color", "мятный")] == "description"
+    assert con.execute("SELECT count(*) FROM core_gold WHERE in_text IS NULL AND value IS NOT NULL").fetchone()[0] == 0
