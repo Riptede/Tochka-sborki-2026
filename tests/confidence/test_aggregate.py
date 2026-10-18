@@ -52,6 +52,8 @@ def test_thresholds(agg):
     assert agg.threshold("brand") == 0.75
 
 
-def test_calibrator_is_applied():
-    agg = Aggregator(calibrator=lambda attr_id, raw: raw / 2)
+def test_calibrator_is_applied_with_step():
+    agg = Aggregator(calibrator=lambda attr_id, step, raw: raw / 2 if step is Step.RULES else raw)
     assert agg.decide([cand("color", "черный", 0.8)], ["color"])["color"].confidence == 0.4
+    parse = cand("color", "черный", 0.8, Step.PARSE, Source.SELLER_ATTRS)
+    assert agg.decide([parse], ["color"])["color"].confidence == 0.8

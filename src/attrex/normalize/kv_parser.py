@@ -112,7 +112,7 @@ class KeyAliases:
                     if canon and any(normalizer.same(attr_id, canon.value, v) for v in values):
                         hits[pair.key, attr_id] += 1
         best: dict[str, Alias] = {}
-        for (key, attr_id), n in seen.items():
+        for (key, attr_id), n in sorted(seen.items()):     # sorted: при равной точности результат не зависит от порядка строк
             precision = hits[key, attr_id] / n
             if n >= min_support and precision >= min_precision and precision > getattr(best.get(key), "score", 0):
                 best[key] = Alias(attr_id, round(precision, 3))

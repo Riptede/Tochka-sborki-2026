@@ -34,6 +34,8 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=1, help="процессов для прогона")
     ap.add_argument("--hide-category", action="store_true",
                     help="скрыть категорию из БД: офферы идут как карточки без оффера (проверка шага 0)")
+    ap.add_argument("--raw-confidence", action="store_true",
+                    help="без калибровки: сырая уверенность и порог accept_threshold (строка ablation «до калибровки»)")
     ap.add_argument("--knowledge-folds", help="из эталона каких фолдов строить словари (по умолчанию из конфига)")
     ap.add_argument("--db", type=Path, default=paths.DB)
     ap.add_argument("--out", type=Path, default=paths.OUTPUTS)
@@ -49,6 +51,8 @@ def main() -> None:
         print(f"загружено: {a.run_id}")
         return
 
+    if a.raw_confidence:
+        cfg = {**cfg, "confidence": {**cfg["confidence"], "calibration": None}}
     steps = parse_steps(a.steps, list(cfg["cascade"]))
     folds = _csv(a.fold)
     knowledge = _csv(a.knowledge_folds) or tuple(cfg["knowledge_folds"])
@@ -57,7 +61,8 @@ def main() -> None:
               file=sys.stderr)
     label = "-".join([*steps, *folds, *(["nocat"] if a.hide_category else [])])
     spec = RunSpec(run_id=a.run_id or default_run_id(label), steps=steps, knowledge_folds=knowledge, folds=folds,
-                   category_id=a.category, limit=a.limit, workers=a.workers, hide_category=a.hide_category)
+                   category_id=a.category, limit=a.limit, workers=a.workers, hide_category=a.hide_category,
+                   extra={"calibration": cfg["confidence"].get("calibration")})
 
     t0 = time.time()
     con = duckdb.connect(str(a.db), read_only=True)

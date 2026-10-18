@@ -6,15 +6,17 @@
     support(v)    = 1 − Π (1 − w_step · score)   по одному лучшему кандидату на (шаг, источник) со значением v
     confidence(v) = support(v) · support(v) / Σ support(всех значений)
 
-Это сырая уверенность. Калибратор переводит её в вероятность, что значение верно; в базлайне он тождественный,
-обученный подставляет b2/calibration. Порог «в каталог» — тоже здесь: калибровка подбирает его по атрибуту.
+Это сырая уверенность. Калибратор (calibration.py) переводит её в вероятность, что значение верно, отдельно
+по атрибуту и шагу, который дал значение. Пороги «в каталог» по атрибуту подбирает та же калибровка.
 """
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+from attrex.confidence.calibration import IsotonicCalibrator
 from attrex.contracts import BuildContext, Candidate, Step
 from attrex.normalize.resources import NormalizeResources
+from attrex.paths import CONFIGS
 
 SameFn = Callable[[str, str, str], bool]     # (attr_id, канон, канон) → одно ли значение
 
@@ -34,10 +36,10 @@ class AttrDecision:
 
 
 class Calibrator(Protocol):
-    def __call__(self, attr_id: str, raw: float) -> float: ...
+    def __call__(self, attr_id: str, step: Step, raw: float) -> float: ...
 
 
-def identity_calibrator(attr_id: str, raw: float) -> float:
+def identity_calibrator(attr_id: str, step: Step, raw: float) -> float:
     return raw
 
 
@@ -74,8 +76,8 @@ class Aggregator:
         i = max(range(len(groups)), key=lambda k: supports[k])
         raw = supports[i] * supports[i] / total if total else 0.0
         best = max(groups[i], key=lambda c: self._weight(c) * c.score)
-        return AttrDecision(attr_id, best.value, round(self.calibrator(attr_id, raw), 4), best, tuple(groups[i]),
-                            len(groups))
+        return AttrDecision(attr_id, best.value, round(self.calibrator(attr_id, best.step, raw), 4), best,
+                            tuple(groups[i]), len(groups))
 
     def _group(self, attr_id: str, cands: list[Candidate]) -> list[list[Candidate]]:
         groups: list[list[Candidate]] = []
@@ -103,8 +105,15 @@ class Aggregator:
         return self.step_weights.get(c.step, 1.0)
 
 
-def build(ctx: BuildContext, calibrator: Calibrator = identity_calibrator) -> Aggregator:
+def build(ctx: BuildContext) -> Aggregator:
+    """Агрегатор с калибровкой из configs/<confidence.calibration>, если файл есть; иначе — сырая уверенность."""
     cfg = ctx.config.get("confidence", {})
     res = ctx.resource(NormalizeResources.from_context)
-    return Aggregator(cfg.get("step_weights"), res.normalizer.same, calibrator,
-                      cfg.get("accept_threshold", 0.75), cfg.get("thresholds"))
+    calibrator: Calibrator = identity_calibrator
+    thresholds = dict(cfg.get("thresholds") or {})
+    path = CONFIGS / cfg["calibration"] if cfg.get("calibration") else None
+    if path is not None and path.exists():
+        fitted = IsotonicCalibrator.load(path)
+        calibrator, thresholds = fitted, {**fitted.thresholds, **thresholds}
+    return Aggregator(cfg.get("step_weights"), res.normalizer.same, calibrator, cfg.get("accept_threshold", 0.75),
+                      thresholds)

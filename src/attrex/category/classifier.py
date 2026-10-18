@@ -14,6 +14,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
 from attrex.contracts import BuildContext, Card, CategorySource
+from attrex.normalize.dictionary import top_vote
 from attrex.normalize.text import phrase_key
 
 _CONDITION_PREFIX = re.compile(r"^(восстановленн\w*|уцененн\w*)\s+")
@@ -59,7 +60,7 @@ class TitleCategoryClassifier:
         for n, by_key in counts.items():
             tables[n] = {}
             for key, c in by_key.items():
-                cat, top = c.most_common(1)[0]
+                cat, top = top_vote(c)
                 tables[n][key] = (cat, top, sum(c.values()))
         return cls(tables, prior)
 

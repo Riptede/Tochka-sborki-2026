@@ -44,8 +44,13 @@ class DictMatch:
     end: int = -1
 
 
+def top_vote(votes: Counter):
+    """Самое частое значение; при равенстве — меньшее: порядок строк из БД не должен менять результат."""
+    return min(votes.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
 def _decide(attr_id: str, votes: Counter) -> DictMatch:
-    value, n = votes.most_common(1)[0]
+    value, n = top_vote(votes)
     total = sum(votes.values())
     return DictMatch(attr_id, value, n / total, total)
 

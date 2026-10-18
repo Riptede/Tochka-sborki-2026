@@ -80,6 +80,27 @@ def test_rules_candidates_pass_grounding(rules, res):
     assert cands and all(res.grounding.check(card, c) for c in cands)
 
 
+def test_keyword_before_number_wins_ties(rules):
+    card = Card(sku_id=6, title="Фотошторы 365home", description="Высота 270 см, ширина одного полотна - 145 см.")
+    got = values(rules.extract(card, CategorySchema(None, ("width", "height")), []))
+    assert got == {"height": {"270"}, "width": {"145"}}
+
+
+def test_rules_do_not_depend_on_hash_seed():
+    """Порядок обхода множеств строк зависит от PYTHONHASHSEED: правила не должны от него зависеть."""
+    import subprocess
+    import sys
+    code = ("from tests.normalize.conftest import DICT_ROWS; from attrex.normalize.resources import NormalizeResources;"
+            "from attrex.normalize.rules import UnitNumberRule; from attrex.normalize.text import CardText;"
+            "from attrex.contracts import Card;"
+            "r = UnitNumberRule(NormalizeResources.from_rows(DICT_ROWS));"
+            "c = Card(1, 'x', 'Высота 270 см, ширина 145 см, глубина 40 см, вес 2 кг');"
+            "print(sorted((x.attr_id, x.value) for x in r.apply(CardText.of(c), frozenset({'width','height','depth','weight'}))))")
+    outs = {subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
+                           env={**__import__("os").environ, "PYTHONHASHSEED": str(seed)}).stdout for seed in (1, 2, 3)}
+    assert len(outs) == 1
+
+
 def test_year_is_not_weight(rules):
     card = Card(sku_id=5, title="Коврик автомобильный KIA Ceed 2012 г.", description="Вес 1,5 кг")
     got = values(rules.extract(card, CategorySchema(None, ("weight",)), []))

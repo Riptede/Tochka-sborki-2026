@@ -104,14 +104,17 @@ class UnitNumberRule:
     """
     WINDOW_BEFORE = 30     # символов от ключевого слова до числа
     WINDOW_AFTER = 8       # «16GB RAM» — ключевое слово сразу после числа; дальше оно относится к следующему числу
+    AFTER_PENALTY = 2      # «Высота 270 см, ширина …»: при равном расстоянии слово перед числом важнее слова после
 
     def __init__(self, res: NormalizeResources):
         reg, settings = res.registry, res.settings
         self.scores = settings.scores
         self.attr_ids = frozenset(a for a, s in reg.attrs.items() if s.kind == "number")
-        self.units = {a: reg[a].unit for a in self.attr_ids}
+        # порядок — как в реестре: от него зависит выбор при равных расстояниях, он должен быть одинаков в любом процессе
+        self.units = {a: s.unit for a, s in reg.attrs.items() if a in self.attr_ids}
         self.units.update({a: u for a, u in settings.unit_consumers.items() if a in reg.attrs})
-        self.keywords = {a: re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, kws)) + ")")
+        # ключевое слово — целиком («высота», а не «высот»): расстояние до числа считаем от конца слова
+        self.keywords = {a: re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, kws)) + r")\w*")
                          for a, kws in settings.keywords.items() if kws}
 
     def apply(self, text: CardText, wanted: frozenset[str]) -> Iterator[Candidate]:
@@ -151,7 +154,7 @@ class UnitNumberRule:
         if e <= m.start and m.start - e <= self.WINDOW_BEFORE and "\n" not in text[e:m.start]:
             return m.start - e
         if s >= m.end and s - m.end <= self.WINDOW_AFTER and "\n" not in text[m.end:s]:
-            return s - m.end
+            return (s - m.end) * self.AFTER_PENALTY + 1
         return None
 
 
