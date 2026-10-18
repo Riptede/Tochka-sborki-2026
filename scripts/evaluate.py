@@ -15,7 +15,7 @@ import duckdb
 from attrex import paths
 from attrex.db import connect
 from attrex.metrics.report import RunInfo, render
-from attrex.metrics.scoring import comparison_same, evaluate, load_outcomes
+from attrex.metrics.scoring import comparison_same, coverage, evaluate, load_outcomes
 
 
 def run_info(con: duckdb.DuckDBPyConnection, run_id: str, folds: list[str]) -> RunInfo:
@@ -24,7 +24,7 @@ def run_info(con: duckdb.DuckDBPyConnection, run_id: str, folds: list[str]) -> R
     if row is None:
         raise SystemExit(f"нет прогона {run_id} в pred_runs")
     cfg = json.loads(row[0])
-    return RunInfo(run_id, cfg.get("steps", []), folds, cfg.get("n_cards"), float(row[1]))
+    return RunInfo(run_id, cfg.get("steps", []), folds, cfg.get("n_cards"), float(row[1]), usage=cfg.get("usage", {}))
 
 
 def main() -> None:
@@ -44,6 +44,7 @@ def main() -> None:
             return run_info(con, run_id, folds), evaluate(load_outcomes(con, folds, same, run_id=run_id))
 
         info, metrics = measure(a.run_id)
+        metrics.coverage = coverage(con, a.run_id)
         compare = [r.strip() for r in a.compare.split(",") if r.strip()]
         ablation = [measure(r) for r in compare] + [(info, metrics)] if compare else []
     finally:
