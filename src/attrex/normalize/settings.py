@@ -38,6 +38,7 @@ class NormalizeSettings:
     scores: Scores = Scores()
     parse: ParseSettings = ParseSettings()
     retrieval: dict = field(default_factory=dict)     # разбирает normalize/retrieval.py: RetrievalSettings
+    model_match: dict = field(default_factory=dict)   # разбирает normalize/model_match.py: ModelMatchSettings
     min_prefix_count: int = 3
     max_brand_offset: int = 2
     dims_min_support: int = 5
@@ -67,6 +68,7 @@ def parse_settings(cfg: dict) -> NormalizeSettings:
         scores=Scores(**cfg.get("scores", {})),
         parse=ParseSettings(**cfg.get("parse", {})),
         retrieval=dict(cfg.get("retrieval", {})),
+        model_match=dict(cfg.get("model_match", {})),
         min_prefix_count=int(layout.get("min_prefix_count", 3)),
         max_brand_offset=int(layout.get("max_brand_offset", 2)),
         dims_min_support=int(dims.get("min_support", 5)),
