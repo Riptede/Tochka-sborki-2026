@@ -1,8 +1,23 @@
 # Параметры пайплайна. Пороги здесь — стартовые значения; калибровка (b2) перезаписывает их по атрибутам.
 
+# Шаги каскада по порядку (CLAUDE.md, «Каскад»): имя шага из Step → модуль с build(ctx) -> Extractor.
+# Новый шаг — строка здесь, pipeline.py не меняется. --steps у run_pipeline выбирает подмножество (ablation).
+cascade:
+  rules: attrex.normalize.rules
+  parse: attrex.normalize.kv_parser
+
+# Шаг 0 — категория карточки: модуль с build(ctx) -> resolve(card) -> Card. null — только категория из БД
+# (фид или клики); карточки без неё получают схему из сквозных атрибутов schema.fallback_required.
+category:
+  resolver: null
+
+# Из эталона каких фолдов строятся словари, раскладки и выученные алиасы. test и holdout_category — никогда.
+knowledge_folds: [train]
+
 schema:
   required_fill_rate: 0.70     # фасет обязательный, если заполнен у ≥ 70% офферов категории (EDA, раздел 5)
   min_offers_for_own_schema: 50  # меньше — схема наследуется от родительской категории
+  fallback_required: [brand, model, color]   # категория неизвестна: только сквозные атрибуты (EDA, раздел 9)
 
 confidence:
   accept_threshold: 0.75       # выше — в каталог, ниже — дальше по каскаду или на ручную проверку

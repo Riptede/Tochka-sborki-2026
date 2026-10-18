@@ -85,10 +85,26 @@ class Extractor(Protocol):
     prior — кандидаты всех предыдущих шагов по этой карточке. Шаг сам решает, какие атрибуты ему
     обрабатывать: дорогие шаги берут только пустые и неуверенные. Шаг не выбирает итоговое значение
     и не пишет в БД: это делают confidence (b2) и pipeline (b4).
+
+    Платный шаг (LLM, эмбеддинги) дополнительно отдаёт drain_usage() -> Usage: расход с прошлого вызова,
+    pipeline складывает его в pred_runs.
     """
     step: Step
 
     def extract(self, card: Card, schema: CategorySchema, prior: list[Candidate]) -> list[Candidate]: ...
+
+
+@dataclass
+class Usage:
+    """Расход платных вызовов (рубли — по ценам configs/pipeline.yaml). Складывается по шагам и процессам."""
+    llm_calls: int = 0
+    llm_tokens: int = 0
+    llm_cost_rub: float = 0.0
+    embed_tokens: int = 0
+    embed_cost_rub: float = 0.0
+
+    def __add__(self, other: "Usage") -> "Usage":
+        return Usage(**{k: getattr(self, k) + getattr(other, k) for k in asdict(self)})
 
 
 @dataclass
