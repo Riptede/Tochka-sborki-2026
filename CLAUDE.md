@@ -60,7 +60,8 @@ pred_predictions, outputs/predictions.* (b4) → очередь проверки
 configs/attributes.yaml   реестр атрибутов: attr_id, тип, единица, поля фида, обязательные по категориям
 configs/pipeline.yaml     пороги, параметры LLM, разбиение
 configs/normalize.yaml    b2: ключевые слова и алиасы атрибутов, ручные синонимы, скоры правил
-src/attrex/paths.py       все пути проекта
+src/attrex/paths.py       все пути проекта; подхватывает .env (шаблон — .env.example), окружение важнее
+src/attrex/config.py      схемы configs/*.yaml (pydantic): новый ключ конфига — сначала сюда, иначе загрузка упадёт
 src/attrex/registry.py    загрузка реестра атрибутов
 src/attrex/contracts.py   Card, CategorySchema, Candidate, Extractor, Prediction, перечисления Step/Source/Status
 src/attrex/db/schema.sql  схема DuckDB
@@ -79,6 +80,8 @@ results/<run_id>/         в git: report.md, run.json, predictions.parquet ит�
 notebooks/NN_тема.ipynb   ноутбуки; номер задаёт порядок, в первой ячейке — блок и автор
 apps/review_prototype/    кликабельный прототип интерфейса модератора (статичный HTML)
 tests/                    pytest
+docs/eda/                 EDA в Markdown для чтения без Jupyter: после правки ноутбука — пересобрать (docs/eda/README.md)
+docs/review_protocol.md   протокол ручной проверки для модератора
 docs/checkpoints/         материалы чекпоинтов
 data/                     НЕ в git: raw/ (файлы организатора), interim/ (кэш EDA), processed/, attrex.duckdb
 outputs/                  НЕ в git: predictions и отчёты прогона
@@ -240,6 +243,7 @@ LLM вызываем только для обязательного поля, к
 uv sync --extra eda --extra llm # окружение; для локальных эмбеддингов добавить --extra ml
 uv run pytest                   # тесты
 uv run ruff check src tests     # линтер
+uv run python -m attrex.config  # проверка configs/*.yaml по схемам
 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb   # EDA (на ВМ без EDA_FAST_PICKLE)
 git push                        # сдача: из ~/project на ВМ в Gitea
 ```

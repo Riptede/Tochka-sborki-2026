@@ -4,9 +4,11 @@ attr_id в коде, БД, predictions и промптах берётся тол
 """
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 
 import yaml
 
+from attrex.config import validate_attributes
 from attrex.paths import CONFIGS
 
 KINDS = {"number", "category", "text"}
@@ -74,6 +76,7 @@ def _spec(attr_id: str, d: dict) -> AttrSpec:
 def load_registry(path: str | None = None) -> Registry:
     with open(path or CONFIGS / "attributes.yaml", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
+    validate_attributes(cfg, Path(path or CONFIGS / "attributes.yaml"))
     attrs = {a: _spec(a, d) for a, d in cfg["attributes"].items()}
     required = {}
     for cid, c in cfg.get("categories", {}).items():

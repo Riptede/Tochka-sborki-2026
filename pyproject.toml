@@ -10,11 +10,12 @@ dependencies = [
     "pyarrow>=16",
     "duckdb>=1.1",
     "pyyaml>=6",
+    "pydantic>=2.6",     # схемы конфигов (attrex/config.py)
 ]
 
 [project.optional-dependencies]
 # b1: ноутбуки EDA
-eda = ["matplotlib>=3.8", "ipykernel>=6.29", "nbclient>=0.10", "nbformat>=5.10"]
+eda = ["matplotlib>=3.8", "ipykernel>=6.29", "nbclient>=0.10", "nbformat>=5.10", "nbconvert>=7.16"]
 # b2: retrieval-нормализатор (e5-small на CPU)
 ml = ["sentence-transformers>=3.0", "faiss-cpu>=1.8"]
 # b3: LLM и эмбеддинги через OpenAI-совместимый API платформы
