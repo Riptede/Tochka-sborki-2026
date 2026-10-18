@@ -7,6 +7,13 @@ schema:
 confidence:
   accept_threshold: 0.75       # выше — в каталог, ниже — дальше по каскаду или на ручную проверку
   category_min_conf: 0.60      # ниже — извлекаем только сквозные атрибуты (scope: global)
+  thresholds: {}               # порог по атрибуту, если он отличается от accept_threshold (пишет калибровка)
+  step_weights:                # насколько доверяем шагу при сложении подтверждений одного значения
+    rules: 1.0
+    parse: 1.0
+    retrieval: 0.8
+    llm: 0.9
+    model_match: 0.5
 
 # LLM и эмбеддинги — API платформы хакатона (OpenAI-совместимый). Адрес и ключ берутся из окружения ВМ:
 # OPENAI_BASE_URL / OPENAI_API_KEY (их же читает клиент openai). В конфиг и в git ключи не кладём.
