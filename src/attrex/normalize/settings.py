@@ -18,6 +18,13 @@ class Scores:
 
 
 @dataclass(frozen=True)
+class ParseSettings:
+    alias_score: float = 0.9          # скор пары с ручным алиасом ключа
+    learn_min_support: int = 10       # выученный алиас: сколько карточек с этим ключом и эталоном атрибута
+    learn_min_precision: float = 0.7  # и доля, где значение ключа подтвердило эталон
+
+
+@dataclass(frozen=True)
 class NormalizeSettings:
     keywords: dict[str, tuple[str, ...]] = field(default_factory=dict)
     unit_consumers: dict[str, str] = field(default_factory=dict)
@@ -29,6 +36,7 @@ class NormalizeSettings:
     synonyms: dict[str, dict[str, str]] = field(default_factory=dict)
     compat_words: frozenset[str] = frozenset()
     scores: Scores = Scores()
+    parse: ParseSettings = ParseSettings()
     min_prefix_count: int = 3
     max_brand_offset: int = 2
     dims_min_support: int = 5
@@ -56,6 +64,7 @@ def parse_settings(cfg: dict) -> NormalizeSettings:
         synonyms={a: {str(k): str(v) for k, v in s.items()} for a, s in cfg.get("synonyms", {}).items()},
         compat_words=frozenset(_folded(cfg.get("compat_words"))),
         scores=Scores(**cfg.get("scores", {})),
+        parse=ParseSettings(**cfg.get("parse", {})),
         min_prefix_count=int(layout.get("min_prefix_count", 3)),
         max_brand_offset=int(layout.get("max_brand_offset", 2)),
         dims_min_support=int(dims.get("min_support", 5)),

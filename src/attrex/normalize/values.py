@@ -58,6 +58,18 @@ class ValueNormalizer:
         v = canon_string(attr_id, raw)
         return CanonValue(v, self.scores.unknown_value, False) if v else None
 
+    def same(self, attr_id: str, a: str | None, b: str | None) -> bool:
+        """Два канона — одно значение: числа с точностью округления, процессор — по модели без частоты
+        (частоты в эталоне у одной модели расходятся, а в тексте их обычно нет; EDA, раздел 7)."""
+        if a is None or b is None:
+            return False
+        if self.registry[attr_id].kind == "number":
+            return same_number(a, b)
+        key_fn = self._keys.get(attr_id)
+        if key_fn and key_fn(a) is not None and key_fn(a) == key_fn(b):
+            return True
+        return a == b
+
     def supports(self, attr_id: str, fragment: str, value: str) -> bool:
         """Фрагмент текста подтверждает значение: сравнение после нормализации, а не по строке."""
         if not fragment or not value:
