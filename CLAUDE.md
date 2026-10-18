@@ -176,6 +176,9 @@ outputs/                  НЕ в git: predictions и отчёты прогон�
   тоже должны лежать на ВМ в `data/raw/`: на них проверяем, что сборка по README воспроизводится.
 - Jupyter платформы работает на той же ВМ. Ядро проекта: `uv run python -m ipykernel install --user --name attrex`.
 - Файлы `/opt/hackathon/*` и папку `logs/` (логи платформы) не трогаем.
+- Решения модераторов (b5) копятся в `data/processed/review/decisions.parquet`, а не сразу в `rev_decisions`:
+  так правило одного писателя не нарушается. В БД их переносит `python -m attrex.review.decisions --to-db`,
+  когда БД никто не держит. Синонимы из решений — `configs/review_synonyms.yaml` (генерирует `attrex.review.feedback`).
 
 **LLM и эмбеддинги** — OpenAI-совместимый API платформы. Адрес и ключ уже в окружении ВМ (`OPENAI_BASE_URL`,
 `OPENAI_API_KEY`); клиент `openai` читает их сам. Модели и цены — в `configs/pipeline.yaml` (рубли за 1 тыс. токенов):
@@ -235,6 +238,19 @@ uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipyn
 git push                        # сдача: из ~/project на ВМ в Gitea
 ```
 
+Базлайн от сырых файлов до файла сдачи (на ВМ — в tmux, перед каждым шагом `free -h`):
+
+```
+uv run python scripts/build_db.py                                          # data/raw → data/attrex.duckdb
+uv run python -m attrex.confidence.calibration --fold valid --workers 2    # configs/calibration.yaml
+uv run python scripts/run_pipeline.py --fold valid --steps rules --raw-confidence --run-id <id-rules>   # ablation
+uv run python scripts/run_pipeline.py --fold valid --run-id <id-all>       # весь каскад с калибровкой
+uv run python scripts/evaluate.py --run-id <id-all> --compare <id-rules>   # outputs/<id-all>/report.md
+uv run python scripts/run_pipeline.py --workers 3 --run-id <id-submit>     # все карточки
+uv run python scripts/export.py --run-id <id-submit>                       # outputs/predictions.parquet и .csv
+uv run python -m attrex.review.queue --run-id <id-submit> --limit 500      # очередь модератору
+```
+
 Файлы организатора кладём в `data/raw/`: `skus.pkl`, `sku_desc.parquet`, `query_clicks.parquet`.
 
 ## План
@@ -246,5 +262,5 @@ git push                        # сдача: из ~/project на ВМ в Gitea
 | 3 | b4 | метрики и ablation-таблица для базлайна; формат файла сдачи. Ветка `b4/pipeline-baseline` |
 | 4 | b2 | шаг 0 (категория), retrieval на e5-small на CPU (временно; bge-m3 через API — после сравнения на `valid`), калибровка уверенности. Шаг 0 — ветка `b2/category-baseline`, retrieval (триграммы, Encoder под эмбеддинги) — `b2/retrieval-baseline` |
 | 5 | b3 | LLM-шаг на остатке с бюджетом; вклад в ablation. Клиент и шаг — ветка `b3/llm-baseline` (по умолчанию выключен) |
-| 6 | b5 | очередь проверки на реальных predictions, возврат решений в словари; прототип → рабочий интерфейс |
+| 6 | b5 | очередь проверки на реальных predictions, возврат решений в словари; прототип → рабочий интерфейс. Очередь, решения и обратная связь — ветка `b5/review-baseline` |
 | 7 | все | README по шагам запуска, презентация с цифрами из прогона |
