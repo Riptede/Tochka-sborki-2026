@@ -96,12 +96,21 @@ class Extractor(Protocol):
 
 @dataclass
 class Usage:
-    """Расход платных вызовов (рубли — по ценам configs/pipeline.yaml). Складывается по шагам и процессам."""
+    """Расход платных вызовов (рубли — по ценам configs/pipeline.yaml). Складывается по шагам и процессам.
+
+    Счётчики качества LLM-шага (b3) идут сюда же: так они попадают в run.json и pred_runs.config без новых колонок.
+    """
     llm_calls: int = 0
     llm_tokens: int = 0
     llm_cost_rub: float = 0.0
     embed_tokens: int = 0
     embed_cost_rub: float = 0.0
+    api_failures: int = 0          # вызовы API (чат и эмбеддинги), не удавшиеся после всех повторов
+    llm_skipped: int = 0           # вызовы, которых не было: кончился бюджет или API много раз подряд не отвечал
+    llm_invalid: int = 0           # ответы не по JSON-схеме: отброшены целиком
+    llm_cards: int = 0             # карточки, по которым LLM-шаг делал запрос
+    llm_values: int = 0            # непустые значения в валидных ответах (по всем ответам self-consistency)
+    llm_ungrounded: int = 0        # из них отброшены: нет цитаты в карточке или она не подтверждает значение
 
     def __add__(self, other: "Usage") -> "Usage":
         return Usage(**{k: getattr(self, k) + getattr(other, k) for k in asdict(self)})

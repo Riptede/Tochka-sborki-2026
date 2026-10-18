@@ -15,6 +15,7 @@ from typing import Protocol
 import numpy as np
 
 from attrex.contracts import BuildContext, Candidate, Card, CategorySchema, Source, Step, Usage
+from attrex.llm.client import BudgetExceeded
 from attrex.normalize.resources import NormalizeResources
 from attrex.normalize.text import TextField, phrase_key
 
@@ -120,7 +121,10 @@ class RetrievalExtractor:
             queries = self._parse_queries(attr_id, prior) + title_queries
             if not queries:
                 continue
-            hits = self.indexes[attr_id].best([q.text for q in queries])
+            try:
+                hits = self.indexes[attr_id].best([q.text for q in queries])
+            except BudgetExceeded:     # эмбеддинги платформы недоступны: сбой учтён клиентом, прогон идёт дальше
+                return out
             scored = [(sim, q, self.indexes[attr_id].values[i]) for (i, sim), q in zip(hits, queries)
                       if sim >= self.settings.min_similarity]
             if scored:

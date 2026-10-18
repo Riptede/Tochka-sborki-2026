@@ -4,6 +4,7 @@
     uv run python scripts/run_pipeline.py --steps rules,parse --fold valid     # + парсер — строка ablation
     uv run python scripts/run_pipeline.py --workers 3                          # все карточки — для файла сдачи
     uv run python scripts/run_pipeline.py --load-only --run-id 20261018-0300-rules-valid   # загрузить готовый прогон
+    uv run python scripts/run_pipeline.py --fold valid --category 761,987 --llm-budget 30   # с LLM на остатке
 
 На ВМ хакатона: перед запуском `free -h`, долгий прогон — в tmux (CLAUDE.md, «Где работаем»).
 """
@@ -30,13 +31,15 @@ def main() -> None:
     ap.add_argument("--run-id", help="по умолчанию YYYYMMDD-HHMM-<шаги>[-<фолды>]")
     ap.add_argument("--steps", help="шаги каскада через запятую (configs/pipeline.yaml, cascade); по умолчанию все")
     ap.add_argument("--fold", help="только карточки этих фолдов core_splits через запятую: valid, test, …")
-    ap.add_argument("--category", type=int, help="только карточки этой категории")
+    ap.add_argument("--category", help="только карточки этих категорий через запятую: 761,987")
     ap.add_argument("--limit", type=int, help="первые N карточек — для быстрой проверки")
     ap.add_argument("--workers", type=int, default=1, help="процессов для прогона")
     ap.add_argument("--hide-category", action="store_true",
                     help="скрыть категорию из БД: офферы идут как карточки без оффера (проверка шага 0)")
     ap.add_argument("--raw-confidence", action="store_true",
                     help="без калибровки: сырая уверенность и порог accept_threshold (строка ablation «до калибровки»)")
+    ap.add_argument("--llm-budget", type=float,
+                    help="включить LLM-шаг на этот прогон с бюджетом в рублях (configs/pipeline.yaml не меняется)")
     ap.add_argument("--knowledge-folds", help="из эталона каких фолдов строить словари (по умолчанию из конфига)")
     ap.add_argument("--db", type=Path, default=paths.DB)
     ap.add_argument("--out", type=Path, default=paths.OUTPUTS)
@@ -54,6 +57,10 @@ def main() -> None:
 
     if a.raw_confidence:
         cfg = {**cfg, "confidence": {**cfg["confidence"], "calibration": None}}
+    if a.llm_budget is not None:
+        if a.llm_budget <= 0:
+            ap.error("--llm-budget должен быть больше 0")
+        cfg = {**cfg, "llm": {**cfg["llm"], "enabled": True, "budget_rub": a.llm_budget}}
     steps = parse_steps(a.steps, list(cfg["cascade"]))
     if "llm" in steps and cfg["llm"].get("enabled") and a.workers > 1:
         ap.error("LLM-прогон — с --workers 1: бюджет llm.budget_rub считается на процесс")
@@ -64,8 +71,10 @@ def main() -> None:
               file=sys.stderr)
     label = "-".join([*steps, *folds, *(["nocat"] if a.hide_category else [])])
     spec = RunSpec(run_id=a.run_id or default_run_id(label), steps=steps, knowledge_folds=knowledge, folds=folds,
-                   category_id=a.category, limit=a.limit, workers=a.workers, hide_category=a.hide_category,
-                   extra={"calibration": cfg["confidence"].get("calibration")})
+                   categories=tuple(int(c) for c in _csv(a.category)), limit=a.limit, workers=a.workers,
+                   hide_category=a.hide_category,
+                   extra={"calibration": cfg["confidence"].get("calibration"),
+                          **({"llm_budget_rub": a.llm_budget} if a.llm_budget is not None else {})})
 
     t0 = time.time()
     con = connect(a.db)

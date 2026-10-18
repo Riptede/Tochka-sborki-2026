@@ -43,10 +43,12 @@ llm:
   fallback_model: null                   # GigaChat не используем
   reasoning_effort: low
   max_cards_per_call: 6
-  self_consistency_samples: 3
+  self_consistency_samples: 1  # 3 ответа на карточку — ≈94 ₽ на 1000 карточек против ≈31 ₽ (прогон 20261018-2130)
   budget_rub: 0                # жёсткий лимит на прогон; 0 — вызовы запрещены
   temperature: 0.7             # для self-consistency; при одном ответе — 0
   max_tokens: 600              # потолок ответа: по нему бюджет оценивается до вызова
+  timeout_s: 60                # таймаут одного запроса к API
+  max_retries: 2               # повторов после сбоя; дальше — пустой ответ и счётчик api_failures, прогон идёт
   max_description_chars: 2000  # описание в промпте обрезаем
   max_options: 30              # вариантов из справочника на атрибут в промпте
   score: 0.85                  # сырой скор ответа, умножается на долю голосов self-consistency

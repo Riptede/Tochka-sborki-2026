@@ -38,7 +38,7 @@ class RunSpec:
     steps: tuple[str, ...]
     knowledge_folds: tuple[str, ...] = ("train",)
     folds: tuple[str, ...] = ()            # только карточки этих фолдов core_splits (оценка); пусто — все карточки
-    category_id: int | None = None
+    categories: tuple[int, ...] = ()      # только карточки этих категорий; пусто — все
     limit: int | None = None
     workers: int = 1
     hide_category: bool = False            # скрыть категорию из БД: офферы как карточки без оффера (проверка шага 0)
@@ -57,9 +57,9 @@ def iter_cards(con: duckdb.DuckDBPyConnection, spec: RunSpec, batch: int = BATCH
         join = "JOIN core_splits s USING (sku_id)"
         where.append("s.fold IN (SELECT unnest(?))")
         params.append(list(spec.folds))
-    if spec.category_id is not None:
-        where.append("c.category_id = ?")
-        params.append(spec.category_id)
+    if spec.categories:
+        where.append("c.category_id IN (SELECT unnest(?))")
+        params.append(list(spec.categories))
     sql = f"""
         SELECT c.sku_id, c.title, coalesce(c.description, ''), c.category_id, c.category_conf, c.category_source
         FROM core_cards c {join} {"WHERE " + " AND ".join(where) if where else ""}
