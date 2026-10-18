@@ -71,6 +71,11 @@ scripts/build_db.py       b1: data/raw → data/attrex.duckdb (raw_*, core_*)
 scripts/run_pipeline.py   b4: прогон каскада → pred_predictions; флаги --run-id, --steps, --limit, --category
 scripts/evaluate.py       b4: метрики и ablation по run_id → outputs/<run_id>/report.md
 scripts/export.py         b4: файл сдачи outputs/predictions.parquet и .csv
+scripts/make_results.py   итог для сдачи: полный прогон, ablation и шаг 0 на test+holdout → results/ (в git)
+scripts/demo.py           демо без данных организатора: sample/raw → outputs/demo/ за ~20 с; --title — своя карточка
+scripts/make_sample.py    b1: sample/raw — 810 реальных карточек в формате организатора (пересборка из data/)
+sample/raw/               выборка для демо и теста tests/pipeline/test_sample.py; руками не править
+results/<run_id>/         в git: report.md, run.json, predictions.parquet итогового прогона. Цифры README — отсюда
 notebooks/NN_тема.ipynb   ноутбуки; номер задаёт порядок, в первой ячейке — блок и автор
 apps/review_prototype/    кликабельный прототип интерфейса модератора (статичный HTML)
 tests/                    pytest
@@ -220,7 +225,8 @@ LLM вызываем только для обязательного поля, к
   и рублей в `pred_runs`. Ключи берутся из окружения ВМ; никогда не печатать их, не писать в код, логи и git.
   Без ключа в окружении (например, на ноутбуке) LLM-шаг выключается, а не падает.
 - Метрики считаются только кодом `b4`. Цифры в презентацию и README — только из прогона с `run_id`; условные цифры
-  помечаются как условные.
+  помечаются как условные. Проверка сдачи читает репозиторий: итоговый прогон должен лежать в `results/`
+  (`scripts/make_results.py`), а `scripts/demo.py` — работать на чистом клоне после `uv sync`.
 - Разбиение `core_splits` фиксировано: словари, пороги и калибровку подбираем на `train`/`valid`, `test` и
   `holdout_category` — только для итоговых метрик. Заглушки в эталоне — пропуск, а не ошибка модели.
 - Тяжёлые файлы читать потоково или по row group: ноутбук EDA рассчитан на 3 ГБ свободной памяти.
