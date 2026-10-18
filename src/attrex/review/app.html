@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Проверка атрибутов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Интерфейс модератора (b5): дизайн — apps/review_prototype/. Слева очередь, справа карточка и решение. */
+:root {
+  --bg: #f6f7f5; --panel: #ffffff; --ink: #15201d; --ink-2: #4c5753; --ink-3: #7b8581;
+  --line: #dfe3e0; --line-2: #eceeec; --accent: #0f6e66; --accent-soft: #dcefec;
+  --good: #0ca30c; --good-ink: #08700a; --good-soft: #e3f5e3;
+  --warn: #fab219; --warn-ink: #8a5a00; --warn-soft: #fff3d6;
+  --bad-ink: #a3340f; --bad-soft: #fbe6de;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s-none: #b9bfbc;
+  --mark: rgba(237,161,0,.28);
+  --font-ui: "Golos Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121615; --panel: #1a1f1e; --ink: #ecefed; --ink-2: #b7bfbb; --ink-3: #87908c;
+    --line: #2d3432; --line-2: #232928; --accent: #4fc2b6; --accent-soft: #173a36;
+    --good: #0ca30c; --good-ink: #5fd35f; --good-soft: #163019;
+    --warn: #fab219; --warn-ink: #f6c55a; --warn-soft: #3a2f12;
+    --bad-ink: #f0906c; --bad-soft: #3a1f16;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s-none: #4a524f;
+    --mark: rgba(201,133,0,.4);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121615; --panel: #1a1f1e; --ink: #ecefed; --ink-2: #b7bfbb; --ink-3: #87908c;
+  --line: #2d3432; --line-2: #232928; --accent: #4fc2b6; --accent-soft: #173a36;
+  --good: #0ca30c; --good-ink: #5fd35f; --good-soft: #163019;
+  --warn: #fab219; --warn-ink: #f6c55a; --warn-soft: #3a2f12;
+  --bad-ink: #f0906c; --bad-soft: #3a1f16;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s-none: #4a524f;
+  --mark: rgba(201,133,0,.4);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+.wrap { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+h1, h2 { margin: 0; text-wrap: balance; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 16px; font-weight: 600; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.sub { color: var(--ink-2); font-size: 13px; }
+.foot { font-size: 12.5px; color: var(--ink-3); }
+kbd { font-family: var(--font-data); font-size: 11px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--ink-3); margin-left: 6px; background: var(--bg); }
+code { font-family: var(--font-data); font-size: 12.5px; background: var(--line-2); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.btn { font: inherit; font-size: 13px; font-weight: 500; border-radius: 6px; padding: 7px 12px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); display: inline-flex; align-items: center; }
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.btn.primary kbd { color: inherit; background: transparent; border-color: color-mix(in srgb, var(--panel) 50%, transparent); }
+.btn[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--accent); }
+.btn:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+select, input[type="search"], input[type="text"] { font: inherit; font-size: 13px; padding: 6px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); min-width: 0; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.progress { display: grid; gap: 8px; }
+.progress .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; align-items: baseline; }
+.pbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line-2); }
+.pbar span { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink-2); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.toolbar input[type="search"] { flex: 1 1 220px; }
+
+.split { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.qlist { display: grid; gap: 6px; max-height: calc(100vh - 210px); overflow: auto; padding: 2px; align-content: start; }
+@media (max-width: 860px) { .qlist { max-height: 38vh; } }
+.qlist button {
+  text-align: left; font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; cursor: pointer; display: grid; gap: 3px;
+}
+.qlist button[aria-current="true"] { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.qlist .q1 { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; font-size: 12.5px; color: var(--ink-2); }
+.qlist .q2 { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.qlist .q3 { font-size: 12.5px; color: var(--ink-2); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.qlist .empty-list { color: var(--ink-3); font-size: 13px; padding: 12px; }
+.chip { font-size: 11px; letter-spacing: .02em; border-radius: 4px; padding: 1px 6px; background: var(--line-2); color: var(--ink-2); white-space: nowrap; }
+.chip.accept { background: var(--good-soft); color: var(--good-ink); }
+.chip.fix { background: var(--accent-soft); color: var(--accent); }
+.chip.absent { background: var(--bad-soft); color: var(--bad-ink); }
+.chip.warn { background: var(--warn-soft); color: var(--warn-ink); }
+
+.detail { display: grid; gap: 14px; min-width: 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--ink-2); }
+.meta b { color: var(--ink); font-weight: 500; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); font-weight: 600; }
+.attrhead { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-top: 10px; }
+.cand { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 18px; align-items: center; margin-top: 8px; }
+@media (max-width: 560px) { .cand { grid-template-columns: minmax(0, 1fr); } }
+.val { font-size: 22px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.val .unit { font-size: 15px; color: var(--ink-2); font-weight: 500; margin-left: 4px; }
+.raw { font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; }
+.conf { display: grid; gap: 4px; min-width: min(200px, 100%); }
+.conf .nums { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--ink-2); }
+.bar { position: relative; height: 8px; background: var(--line-2); border-radius: 4px; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--warn); }
+.bar b { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink-2); border-radius: 1px; }
+.step { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+.sw { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.sw.rules { background: var(--s1); } .sw.parse { background: var(--s2); } .sw.retrieval { background: var(--s3); }
+.sw.llm { background: var(--s4); } .sw.model_match, .sw.none { background: var(--s-none); }
+.note { font-size: 13px; border-radius: 8px; padding: 8px 12px; margin-top: 10px; background: var(--warn-soft); color: var(--ink); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }
+
+.source-text { display: grid; gap: 8px; }
+.title-text { font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.desc-text { position: relative; white-space: pre-wrap; color: var(--ink-2); max-height: 300px; overflow: auto; border-top: 1px solid var(--line-2); padding-top: 8px; font-size: 13.5px; overflow-wrap: anywhere; }
+mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 2px; outline: 2px solid var(--s4); }
+.quote { font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+
+.decide { display: grid; gap: 10px; }
+.fixrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fixrow input { flex: 1 1 220px; }
+.err { color: var(--bad-ink); font-size: 13px; }
+.resolved { font-size: 13.5px; display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+details.rules summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+details.rules ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); border-radius: 8px; padding: 10px 14px; font-size: 13px; max-width: min(620px, calc(100% - 32px)); box-shadow: 0 6px 24px rgba(0,0,0,.18); z-index: 5; }
+.toast code { background: color-mix(in srgb, var(--bg) 18%, transparent); color: inherit; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Очередь проверки атрибутов</h1>
+      <div class="sub">прогон <span class="num" id="run"></span> · <span id="gen"></span> · решения по <a href="#rules" id="rules-link">протоколу</a></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="download" type="button">Скачать решения</button>
+    </div>
+  </header>
+
+  <section class="panel progress" aria-label="Прогресс">
+    <div class="row">
+      <span><b class="num" id="done">0</b> из <span class="num" id="total">0</span> решено</span>
+      <span class="legend" id="legend"></span>
+    </div>
+    <div class="pbar" id="pbar" role="img" aria-label="Доля решённых"></div>
+  </section>
+
+  <div class="toolbar" role="search">
+    <select id="f-attr" aria-label="Атрибут"></select>
+    <select id="f-state" aria-label="Состояние">
+      <option value="open">нерешённые</option>
+      <option value="all">все</option>
+      <option value="done">решённые</option>
+    </select>
+    <input type="search" id="f-text" placeholder="Поиск по заголовку, SKU или значению" aria-label="Поиск">
+  </div>
+
+  <div class="split">
+    <nav class="qlist" id="qlist" aria-label="Очередь"></nav>
+    <main class="detail" id="detail"></main>
+  </div>
+
+  <details class="panel rules" id="rules">
+    <summary>Правила проверки (docs/review_protocol.md)</summary>
+    <ul>
+      <li><b>Принять</b> — значение верно и подтверждается текстом этой карточки.</li>
+      <li><b>Исправить</b> — значение у товара есть, но другое: каскад ошибся в нормализации или выбрал не ту цифру. Верное значение — из справочника (подсказки при вводе) или число в единице атрибута, без пояснений.</li>
+      <li><b>Нет значения</b> — в тексте карточки значения нет, а значение каскада взято не отсюда (например, из карточки той же модели), или атрибут к товару не относится. Материал вместо цвета («стекло») — тоже сюда.</li>
+      <li><b>Решаем только по тексту карточки.</b> Значение, верное «по жизни», но которого нет в тексте, — «нет значения»: в каталог не попадают характеристики, которые продавец не указал.</li>
+      <li>Не уверены — пропустите строку (<kbd>J</kbd>): нерешённые строки не загружаются и вернутся в следующую очередь.</li>
+      <li>Решения сохраняются в этом браузере. В конце — «Скачать решения» и загрузка файла командой ниже.</li>
+    </ul>
+  </details>
+
+  <div class="foot">Загрузка решений: <code id="cmd"></code><br>
+    Клавиши: <kbd>A</kbd> принять, <kbd>F</kbd> исправить, <kbd>X</kbd> нет значения, <kbd>U</kbd> сбросить, <kbd>J</kbd>/<kbd>K</kbd> следующая/предыдущая.</div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<div id="datalists" hidden></div>
+
+<script type="application/json" id="data">/*__DATA__*/</script>
+
+<script id="logic">
+/* Чистые функции без DOM: их же исполняет тест tests/review/test_app.py (quickjs). */
+const DECISIONS = ["accept", "fix", "absent"];
+
+function rowKey(row) { return row.sku_id + "|" + row.attr_id; }
+
+function csvField(v) {
+  const s = v == null ? "" : String(v);
+  return /[",\r\n]/.test(s) || s !== s.trim() ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+/* Очередь в формате review_queue.csv: те же колонки и строки, decision и fixed_value — решения модератора.
+   Его принимает python -m attrex.review.decisions (read_filled_queue) без правок. */
+function queueCsv(columns, rows, decisions) {
+  const lines = [columns.map(csvField).join(",")];
+  for (const row of rows) {
+    const d = decisions[rowKey(row)] || { decision: row.decision || "", fixed_value: row.fixed_value || "" };
+    const out = Object.assign({}, row, { decision: d.decision || "", fixed_value: d.decision === "fix" ? d.fixed_value : "" });
+    lines.push(columns.map(c => csvField(out[c])).join(","));
+  }
+  return "\ufeff" + lines.join("\r\n") + "\r\n";
+}
+
+function foldText(s) { return String(s).toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim(); }
+
+/* Исправленное значение по протоколу: число — в единице атрибута, справочный атрибут — только из справочника. */
+function normalizeFix(attr, raw, options) {
+  const s = String(raw == null ? "" : raw).trim();
+  if (!s) return { ok: false, error: "Введите верное значение." };
+  if (attr.kind === "number") {
+    const v = s.replace(/\s+/g, "").replace(",", ".");
+    if (!/^\d+(\.\d+)?$/.test(v)) return { ok: false, error: "Нужно число в " + attr.unit + " без единицы и пояснений: 6.7, 256." };
+    return { ok: true, value: String(Number(v)) };
+  }
+  if (attr.kind === "category" && options && options.length) {
+    const want = foldText(s);
+    const hit = options.find(o => foldText(o) === want);
+    return hit ? { ok: true, value: hit } : { ok: false, error: "Такого значения нет в справочнике — выберите из подсказок." };
+  }
+  return { ok: true, value: s.replace(/\s+/g, " ") };
+}
+
+/* Где цитата лежит в тексте: без разницы в регистре, пробелах и ё/е. [начало, конец) или null. */
+function quoteRange(text, quote) {
+  if (!text || !quote || !String(quote).trim()) return null;
+  const pattern = String(quote).trim().split(/\s+/)
+    .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[еёЕЁ]/g, "[её]")).join("\\s+");
+  let m = null;
+  try { m = new RegExp(pattern, "iu").exec(text); } catch (e) { return null; }
+  return m ? [m.index, m.index + m[0].length] : null;
+}
+</script>
+
+<script>
+const DATA = JSON.parse(document.getElementById("data").textContent);
+const ROWS = DATA.rows;
+const STEP = { rules: "правила", parse: "парсер описания", retrieval: "retrieval", llm: "LLM", model_match: "карточка той же модели", none: "—" };
+const SOURCE = { title: "заголовок", description: "описание", seller_attrs: "атрибуты продавца", other_card: "другая карточка", none: "—" };
+const DECISION_TEXT = { accept: "принято", fix: "исправлено", absent: "нет значения" };
+const STORE_KEY = "attrex-review:" + DATA.run_id + ":" + ROWS.length;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const fmtConf = s => (s === "" || s == null || isNaN(+s)) ? "—" : (+s).toFixed(2).replace(".", ",");
+const fmtInt = s => (s === "" || isNaN(+s)) ? "—" : (+s).toLocaleString("ru-RU");
+
+let decisions = {};
+ROWS.forEach(r => { if (DECISIONS.includes((r.decision || "").trim().toLowerCase())) decisions[rowKey(r)] = { decision: r.decision.trim().toLowerCase(), fixed_value: r.fixed_value || "" }; });
+let current = 0;
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+  if (saved && saved.decisions) { decisions = Object.assign(decisions, saved.decisions); current = Math.min(saved.current || 0, ROWS.length - 1); }
+} catch (e) { /* хранилище недоступно: решения живут до закрытия вкладки */ }
+
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ decisions, current })); } catch (e) {}
+}
+
+function attrOf(row) { return DATA.attrs[row.attr_id] || { name: row.attr_id, kind: "text", unit: null, threshold: null }; }
+
+function visible() {
+  const fa = $("#f-attr").value, fs = $("#f-state").value, ft = foldText($("#f-text").value || "");
+  const out = [];
+  ROWS.forEach((r, i) => {
+    if (fa && r.attr_id !== fa) return;
+    const done = !!decisions[rowKey(r)];
+    if ((fs === "open" && done) || (fs === "done" && !done)) return;
+    if (ft && !foldText(r.title + " " + r.sku_id + " " + r.value).includes(ft)) return;
+    out.push(i);
+  });
+  return out;
+}
+
+function chipFor(row) {
+  const d = decisions[rowKey(row)];
+  if (!d) return "";
+  return `<span class="chip ${d.decision}">${DECISION_TEXT[d.decision]}${d.decision === "fix" ? ": " + esc(d.fixed_value) : ""}</span>`;
+}
+
+function renderProgress() {
+  const counts = { accept: 0, fix: 0, absent: 0 };
+  Object.values(decisions).forEach(d => counts[d.decision]++);
+  const done = counts.accept + counts.fix + counts.absent, total = ROWS.length;
+  $("#done").textContent = done.toLocaleString("ru-RU");
+  $("#total").textContent = total.toLocaleString("ru-RU");
+  const col = { accept: "var(--good)", fix: "var(--accent)", absent: "var(--bad-ink)" };
+  $("#pbar").innerHTML = DECISIONS.map(k => counts[k] ? `<span style="width:${100 * counts[k] / total}%;background:${col[k]}"></span>` : "").join("");
+  $("#legend").innerHTML = DECISIONS.map(k => `<span><i style="background:${col[k]}"></i>${DECISION_TEXT[k]} <span class="num">${counts[k]}</span></span>`).join("");
+}
+
+function renderList() {
+  const idx = visible();
+  if (!idx.length) { $("#qlist").innerHTML = `<div class="empty-list">Здесь пусто: смените фильтр.</div>`; return; }
+  $("#qlist").innerHTML = idx.map(i => {
+    const r = ROWS[i], a = attrOf(r);
+    return `<button type="button" data-i="${i}" aria-current="${i === current}">
+      <span class="q1"><span>#${esc(r.rank)} · ${esc(a.name)}</span>${chipFor(r) || `<span class="num">${fmtConf(r.confidence)}</span>`}</span>
+      <span class="q2">${esc(r.value)}${a.unit ? " " + esc(a.unit) : ""}</span>
+      <span class="q3">${esc(r.title)}</span>
+    </button>`;
+  }).join("");
+  $("#qlist").querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", () => select(+b.dataset.i)));
+  const cur = $("#qlist").querySelector('[aria-current="true"]');
+  if (cur) cur.scrollIntoView({ block: "nearest" });
+}
+
+function highlighted(text, quote) {
+  const r = quoteRange(text, quote);
+  if (!r) return { html: esc(text), found: false };
+  return { html: esc(text.slice(0, r[0])) + `<mark id="hit">${esc(text.slice(r[0], r[1]))}</mark>` + esc(text.slice(r[1])), found: true };
+}
+
+function renderDetail() {
+  if (!ROWS.length) { $("#detail").innerHTML = `<div class="panel">Очередь пуста: значений со статусом review в прогоне нет.</div>`; return; }
+  const r = ROWS[current], a = attrOf(r), card = DATA.cards[r.sku_id] || {};
+  const d = decisions[rowKey(r)];
+  const conf = +r.confidence, th = a.threshold;
+  const title = highlighted(r.title || "", r.evidence);
+  const desc = card.description ? highlighted(card.description, title.found ? "" : r.evidence) : null;
+  const found = title.found || (desc && desc.found);
+  const other = r.step === "model_match" || r.source === "other_card";
+  const options = DATA.options[r.attr_id] || [];
+  const hint = a.kind === "number" ? `число в ${a.unit}` : a.kind === "category" && options.length ? "значение из справочника" : "текст";
+  $("#detail").innerHTML = `
+    <section class="panel">
+      <div class="meta">
+        <span>#<b class="num">${esc(r.rank)}</b></span>
+        <span>SKU <b class="num">${esc(r.sku_id)}</b></span>
+        <span>Категория <b>${esc(card.category || r.category_id || "—")}</b></span>
+        <span>Клики <b class="num">${fmtInt(r.clicks)}</b></span>
+        <span>Приоритет <b class="num">${(+r.priority || 0).toFixed(2).replace(".", ",")}</b></span>
+      </div>
+      <div class="attrhead"><h2>${esc(a.name)}</h2><span class="chip">${esc(r.attr_id)}</span><span class="chip">${hint}</span></div>
+      <div class="cand">
+        <div>
+          <div class="val">${esc(r.value)}${a.unit ? `<span class="unit">${esc(a.unit)}</span>` : ""}</div>
+          ${r.value_raw ? `<div class="raw">${other ? "основание" : "в тексте"}: «${esc(r.value_raw)}»</div>` : ""}
+          <div class="step" style="margin-top:4px"><span class="sw ${esc(r.step)}"></span>${esc(STEP[r.step] || r.step)} · ${esc(SOURCE[r.source] || r.source)}</div>
+        </div>
+        <div class="conf">
+          <div class="nums"><span>уверенность <b class="num">${fmtConf(r.confidence)}</b></span>${th != null ? `<span>порог <span class="num">${fmtConf(th)}</span></span>` : ""}</div>
+          <div class="bar" aria-hidden="true"><i style="width:${isNaN(conf) ? 0 : Math.max(0, Math.min(1, conf)) * 100}%"></i>${th != null ? `<b style="left:calc(${th * 100}% - 1px)"></b>` : ""}</div>
+        </div>
+      </div>
+      ${other ? `<div class="note">Значение взято из другой карточки той же модели. Принимайте, только если оно есть в тексте <b>этой</b> карточки; иначе — «нет значения».</div>`
+              : !found && r.evidence ? `<div class="note">Цитата не найдена в заголовке и описании этой карточки — проверьте по сайту (SKU ${esc(r.sku_id)}).</div>` : ""}
+    </section>
+    <section class="panel source-text" aria-label="Текст карточки">
+      <div class="label">Заголовок</div>
+      <div class="title-text">${title.html}</div>
+      <div class="label">Описание</div>
+      ${desc ? `<div class="desc-text" id="desc">${desc.html}</div>` : `<div class="raw">Описания нет${DATA.has_descriptions ? "" : ": страница собрана без БД"}.</div>`}
+      ${r.evidence ? `<div class="quote">Цитата каскада: «${esc(r.evidence)}»</div>` : ""}
+    </section>
+    <section class="panel decide" aria-label="Решение">
+      <div class="actions">
+        <button class="btn primary" type="button" data-act="accept" aria-pressed="${d && d.decision === "accept"}">Принять<kbd>A</kbd></button>
+        <button class="btn" type="button" data-act="fix" aria-pressed="${d && d.decision === "fix"}">Исправить<kbd>F</kbd></button>
+        <button class="btn" type="button" data-act="absent" aria-pressed="${d && d.decision === "absent"}">Нет значения<kbd>X</kbd></button>
+        <button class="btn" type="button" data-act="reset"${d ? "" : " disabled"}>Сбросить<kbd>U</kbd></button>
+        <button class="btn" type="button" data-act="next">Пропустить<kbd>J</kbd></button>
+      </div>
+      <form class="fixrow" id="fixform" ${d && d.decision === "fix" ? "" : "hidden"} autocomplete="off">
+        <input type="text" id="fixval" ${options.length ? `list="dl-${esc(r.attr_id)}"` : ""} value="${esc(d && d.decision === "fix" ? d.fixed_value : "")}"
+               placeholder="${a.kind === "number" ? "число в " + esc(a.unit) : options.length ? "начните вводить — подсказки из справочника" : "верное значение"}" aria-label="Верное значение">
+        ${a.unit ? `<span class="sub">${esc(a.unit)}</span>` : ""}
+        <button class="btn primary" type="submit">Сохранить</button>
+      </form>
+      <div class="err" id="fixerr" hidden></div>
+      ${d ? `<div class="resolved"><span class="chip ${d.decision}">${DECISION_TEXT[d.decision]}</span>${d.decision === "fix" ? `<span>верное значение: <b>${esc(d.fixed_value)}</b>${a.unit ? " " + esc(a.unit) : ""}</span>` : ""}</div>` : ""}
+    </section>`;
+  $("#detail").querySelectorAll("button[data-act]").forEach(b => b.addEventListener("click", () => act(b.dataset.act)));
+  $("#fixform").addEventListener("submit", e => { e.preventDefault(); saveFix(); });
+  const hit = document.getElementById("hit"), box = document.getElementById("desc");
+  if (hit && box && box.contains(hit)) box.scrollTop = Math.max(0, hit.offsetTop - 40);
+}
+
+function render() { renderProgress(); renderList(); renderDetail(); }
+
+function select(i) { current = i; save(); renderList(); renderDetail(); }
+
+function step(dir) {
+  const idx = visible();
+  if (!idx.length) return;
+  const pos = idx.indexOf(current);
+  const next = pos < 0 ? idx[0] : idx[Math.max(0, Math.min(idx.length - 1, pos + dir))];
+  select(next);
+}
+
+function nextOpen() {
+  const shown = new Set(visible());
+  for (let k = 1; k <= ROWS.length; k++) {
+    const i = (current + k) % ROWS.length;
+    if (!decisions[rowKey(ROWS[i])] && shown.has(i)) return i;
+  }
+  return current;
+}
+
+function decide(decision, fixed) {
+  const r = ROWS[current];
+  decisions[rowKey(r)] = { decision, fixed_value: fixed || "" };
+  const was = current;
+  current = nextOpen();
+  save();
+  render();
+  if (current === was) toast("Нерешённых строк в этом фильтре больше нет. Скачайте решения.");
+}
+
+function act(what) {
+  const r = ROWS[current];
+  if (what === "accept" || what === "absent") decide(what);
+  else if (what === "fix") { const f = $("#fixform"); f.hidden = false; const inp = $("#fixval"); inp.focus(); inp.select(); }
+  else if (what === "reset") { delete decisions[rowKey(r)]; save(); render(); }
+  else if (what === "next") step(1);
+}
+
+function saveFix() {
+  const r = ROWS[current], res = normalizeFix(attrOf(r), $("#fixval").value, DATA.options[r.attr_id]);
+  const err = $("#fixerr");
+  if (!res.ok) { err.textContent = res.error; err.hidden = false; return; }
+  if (res.value === r.value) { err.textContent = "Это то же значение, что предлагает каскад: нажмите «Принять»."; err.hidden = false; return; }
+  decide("fix", res.value);
+}
+
+let toastTimer;
+function toast(html) {
+  const t = $("#toast"); t.innerHTML = html; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 6000);
+}
+
+function download() {
+  const n = Object.keys(decisions).length;
+  if (!n) { toast("Решений пока нет."); return; }
+  const blob = new Blob([queueCsv(DATA.columns, ROWS, decisions)], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = DATA.download_name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast(`Скачано: ${n} решений из ${ROWS.length}. Загрузить: <code>${esc(DATA.load_command.replace("<файл>", DATA.download_name))}</code>`);
+}
+
+/* фильтр атрибутов и подсказки справочника */
+const byAttr = {};
+ROWS.forEach(r => { byAttr[r.attr_id] = (byAttr[r.attr_id] || 0) + 1; });
+$("#f-attr").innerHTML = `<option value="">все атрибуты (${ROWS.length})</option>` +
+  Object.entries(byAttr).sort((x, y) => y[1] - x[1]).map(([k, n]) => `<option value="${esc(k)}">${esc(attrOf({ attr_id: k }).name)} (${n})</option>`).join("");
+$("#datalists").innerHTML = Object.entries(DATA.options).map(([k, opts]) =>
+  `<datalist id="dl-${esc(k)}">${opts.map(o => `<option value="${esc(o)}"></option>`).join("")}</datalist>`).join("");
+$("#run").textContent = DATA.run_id;
+$("#gen").textContent = "очередь " + DATA.queue_file;
+$("#cmd").textContent = DATA.load_command;
+["#f-attr", "#f-state"].forEach(s => $(s).addEventListener("change", () => { const idx = visible(); if (idx.length && !idx.includes(current)) current = idx[0]; render(); }));
+$("#f-text").addEventListener("input", () => { const idx = visible(); if (idx.length && !idx.includes(current)) current = idx[0]; render(); });
+$("#download").addEventListener("click", download);
+$("#rules-link").addEventListener("click", () => { $("#rules").open = true; });
+document.addEventListener("keydown", e => {
+  const typing = e.target instanceof Element && e.target.closest("input, select, textarea");
+  if (typing || e.ctrlKey || e.metaKey || e.altKey) {
+    if (e.key === "Escape" && e.target.id === "fixval") { $("#fixform").hidden = true; e.target.blur(); }
+    return;
+  }
+  const k = e.key.toLowerCase();
+  const map = { a: "accept", "ф": "accept", f: "fix", "а": "fix", x: "absent", "ч": "absent", u: "reset", "г": "reset" };
+  if (map[k]) { e.preventDefault(); act(map[k]); }
+  else if (k === "j" || k === "о" || e.key === "ArrowDown") { e.preventDefault(); step(1); }
+  else if (k === "k" || k === "л" || e.key === "ArrowUp") { e.preventDefault(); step(-1); }
+});
+if (ROWS.length && decisions[rowKey(ROWS[current])] && $("#f-state").value === "open") current = nextOpen();
+render();
+</script>
+</html>

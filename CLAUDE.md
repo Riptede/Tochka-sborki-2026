@@ -78,7 +78,7 @@ scripts/make_sample.py    b1: sample/raw — 810 реальных карточе
 sample/raw/               выборка для демо и теста tests/pipeline/test_sample.py; руками не править
 results/<run_id>/         в git: report.md, run.json, predictions.parquet итогового прогона. Цифры README — отсюда
 notebooks/NN_тема.ipynb   ноутбуки; номер задаёт порядок, в первой ячейке — блок и автор
-apps/review_prototype/    кликабельный прототип интерфейса модератора (статичный HTML)
+apps/review_prototype/    прототип интерфейса модератора (статичный HTML); рабочий — python -m attrex.review.app
 tests/                    pytest
 docs/eda/                 EDA в Markdown для чтения без Jupyter: после правки ноутбука — пересобрать (docs/eda/README.md)
 docs/review_protocol.md   протокол ручной проверки для модератора
