@@ -5,6 +5,7 @@
 cascade:
   rules: attrex.normalize.rules
   parse: attrex.normalize.kv_parser
+  retrieval: attrex.normalize.retrieval
 
 # Шаг 0 — категория карточки: модуль с build(ctx) -> resolve(card) -> Card. null — только категория из БД
 # (фид или клики); карточки без неё получают схему из сквозных атрибутов schema.fallback_required.
