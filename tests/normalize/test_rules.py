@@ -153,6 +153,21 @@ def test_brand_prefix_far_more_frequent_wins(dims):
     assert got == {"brand": {"xiaomi"}, "model": {"redmi note 13 pro"}}
 
 
+def test_model_after_brand_with_dot_and_symbol_brand(dims):
+    from attrex.normalize.resources import NormalizeResources
+    from attrex.normalize.title import TitleLayout
+
+    res = NormalizeResources.from_rows([("brand", "leather co.", "leather co.", 30)])
+    rows = [("Кардхолдер Leather Co. для iPhone 15", "Leather Co.")] * 3 + [("Удлинитель электрический Pilot 3", "Pilot")] * 3
+    rules = RulesExtractor(default_rules(res, TitleLayout.learn(rows, min_count=2), dims))
+    schema = CategorySchema(None, ("brand", "model"))
+    got = values(rules.extract(Card(13, "Кардхолдер Leather Co. для iPhone 14 Pro Max белый"), schema, []))
+    assert got == {"brand": {"leather co."}, "model": {"для iphone 14 pro max"}}    # точка бренда — не модель
+    title = "Удлинитель электрический ### С плоской вилкой 3 розетки с кнопкой, 45.0 метров."
+    got = values(rules.extract(Card(14, title), schema, []))
+    assert got == {"brand": {"###"}, "model": {"с плоской вилкой 3 розетки с кнопкой"}}   # бренд — символы, не «С»
+
+
 def test_assumed_ssd_cannot_pass_grounding(rules, res):
     """«16/512GB» не называет тип накопителя: SSD достроен правилом — значение только на ручную проверку."""
     card = Card(sku_id=12, title="Ноутбук HUAWEI MateBook D16 16/512GB", category_id=987)

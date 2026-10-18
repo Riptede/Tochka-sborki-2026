@@ -4,6 +4,7 @@
 Префиксы («смартфон», «подушка декоративная», «восстановленный ноутбук») выучены по train: это часть заголовка
 до бренда оффера. Зная префикс, бренд ищем сразу после него, а модель — всё, что идёт после бренда.
 """
+import re
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from attrex.normalize.settings import load_settings
 from attrex.normalize.text import TextField, Token, phrase_key
 
 MAX_PREFIX_WORDS = 5
+# бренд из символов («###», «***»): не меньше двух знаков и не обычная пунктуация, скобки или кавычки
+_SYMBOL_BRAND = re.compile(r"[^\w\s,.;:\-–—/|()\[\]«»\"'!?]{2,}")
 
 _ROWS_SQL = """
     SELECT c.title, o.vendor
@@ -80,9 +83,15 @@ class TitleLayout:
             hit = self._brand_at(brands, toks, i)
             if hit:
                 return TitleParts(hit, hit.start, hit.end, k > 0, offset)
-        # бренда нет в справочнике, но префикс известен: бренд — слово сразу после префикса
-        if 0 < k < len(toks) and toks[k].text not in self.compat_words:
-            return TitleParts(None, toks[k].start, toks[k].end, True)
+        # бренда нет в справочнике, но префикс известен: бренд — то, что сразу после префикса. Если там не слово
+        # («Удлинитель электрический ### С плоской вилкой»), бренд — эти символы, а модель начинается со слова
+        if 0 < k < len(toks):
+            gap = title.folded[toks[k - 1].end:toks[k].start]
+            if _SYMBOL_BRAND.fullmatch(gap.strip()):
+                start = toks[k - 1].end + len(gap) - len(gap.lstrip())
+                return TitleParts(None, start, start + len(gap.strip()), True)
+            if toks[k].text not in self.compat_words:
+                return TitleParts(None, toks[k].start, toks[k].end, True)
         return TitleParts(None, -1, -1, k > 0)
 
     def _brand_at(self, brands: RefDictionary, toks: list[Token], i: int) -> DictMatch | None:

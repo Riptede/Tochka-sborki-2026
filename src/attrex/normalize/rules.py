@@ -36,6 +36,9 @@ def _candidate(attr_id: str, value: str, field: TextField, score: float, start: 
                      value_raw=evidence if raw is None else raw, evidence=evidence)
 
 
+_LEADING_PUNCT = re.compile(r"[\s.,;:\-–—/|]*")
+
+
 class TitleBrandModelRule:
     """Бренд — первое слово-бренд после префикса заголовка, модель — остаток заголовка после бренда."""
     attr_ids = frozenset({"brand", "model"})
@@ -61,9 +64,11 @@ class TitleBrandModelRule:
                 if brand:
                     yield _candidate("brand", brand, title, scores.unknown_value, parts.brand_start, parts.brand_end)
         if "model" in wanted:
-            model = canon_model(title.text[parts.brand_end:])
+            # «Leather Co. для iPhone 15»: точка бренда — не начало модели
+            start = parts.brand_end + len(_LEADING_PUNCT.match(title.text, parts.brand_end).group())
+            model = canon_model(title.text[start:])
             if model:
-                yield _candidate("model", model, title, trust * self.MODEL_FACTOR, parts.brand_end, len(title.text))
+                yield _candidate("model", model, title, trust * self.MODEL_FACTOR, start, len(title.text))
 
 
 _MEMORY_PAIR = re.compile(r"(?<![\w.])(\d{1,2})\s*(?:gb|гб)?\s*[/+]\s*(\d{1,4})\s*(gb|гб|tb|тб)(?!\w)")
