@@ -23,7 +23,7 @@ from attrex import paths
 from attrex.contracts import BuildContext, Card
 from attrex.db.build import BuildConfig, build
 from attrex.metrics.report import RunInfo, render
-from attrex.metrics.scoring import comparison_same, evaluate, load_outcomes
+from attrex.metrics.scoring import comparison_same, coverage, evaluate, load_outcomes
 from attrex.pipeline import build_pipeline, load_config
 from attrex.registry import load_registry
 from attrex.review.queue import build_queue, write_queue
@@ -111,6 +111,7 @@ def demo_run() -> None:
     con = duckdb.connect(str(db), read_only=True)
     try:
         metrics = evaluate(load_outcomes(con, EVAL_FOLDS, comparison_same(), run_id=RUN_ID))
+        metrics.coverage = coverage(con, RUN_ID)
         info = RunInfo(RUN_ID, spec.steps, EVAL_FOLDS, result.n_cards,
                        note="Демо на выборке sample/raw: цифры иллюстративные, итоговые — в results/.")
         (OUT / RUN_ID / "report.md").write_text(render(info, metrics), encoding="utf-8")
