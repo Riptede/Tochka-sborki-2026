@@ -8,9 +8,8 @@
 import argparse
 from pathlib import Path
 
-import duckdb
-
 from attrex import paths
+from attrex.db import connect
 from attrex.runs import export
 
 
@@ -20,7 +19,7 @@ def main() -> None:
     ap.add_argument("--db", type=Path, default=paths.DB)
     ap.add_argument("--out", type=Path, default=paths.OUTPUTS)
     a = ap.parse_args()
-    con = duckdb.connect(str(a.db), read_only=True)
+    con = connect(a.db)
     try:
         for p in export(con, a.run_id, a.out):
             print(f"{p} ({p.stat().st_size / 2**20:,.1f} МБ)")

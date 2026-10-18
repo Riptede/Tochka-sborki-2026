@@ -1,0 +1,32 @@
+{
+  "run_id": "20261018-1104-full-catalog",
+  "steps": [
+    "rules",
+    "parse",
+    "retrieval",
+    "llm",
+    "model_match"
+  ],
+  "knowledge_folds": [
+    "train"
+  ],
+  "folds": [],
+  "category_id": null,
+  "limit": null,
+  "workers": 3,
+  "hide_category": false,
+  "extra": {
+    "calibration": "calibration.yaml"
+  },
+  "n_cards": 1481914,
+  "n_rows": 7297890,
+  "usage": {
+    "llm_calls": 0,
+    "llm_tokens": 0,
+    "llm_cost_rub": 0.0,
+    "embed_tokens": 0,
+    "embed_cost_rub": 0.0
+  },
+  "started_at": "2026-10-18T11:05:54",
+  "git_commit": "3d29636"
+}
