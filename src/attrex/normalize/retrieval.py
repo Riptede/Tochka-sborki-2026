@@ -14,7 +14,7 @@ from typing import Protocol
 
 import numpy as np
 
-from attrex.contracts import BuildContext, Candidate, Card, CategorySchema, Source, Step
+from attrex.contracts import BuildContext, Candidate, Card, CategorySchema, Source, Step, Usage
 from attrex.normalize.resources import NormalizeResources
 from attrex.normalize.text import TextField, phrase_key
 
@@ -104,6 +104,11 @@ class RetrievalExtractor:
                  res: NormalizeResources):
         self.indexes, self.encoder, self.settings, self.res = indexes, encoder, settings, res
 
+    def drain_usage(self) -> Usage:
+        """Расход на эмбеддинги платформы (у триграмм его нет) — для pred_runs."""
+        drain = getattr(self.encoder, "drain_usage", None)
+        return drain() if drain else Usage()
+
     def extract(self, card: Card, schema: CategorySchema, prior: list[Candidate]) -> list[Candidate]:
         open_attrs = [a for a in schema.required if a in self.indexes and self._is_open(a, prior)]
         if not open_attrs:
@@ -146,10 +151,20 @@ class RetrievalExtractor:
         return out
 
 
-def make_encoder(name: str) -> Encoder:
+def make_encoder(name: str, ctx: BuildContext) -> Encoder:
+    """char — триграммы на CPU; api — эмбеддинги платформы через llm/client.py (без ключа или бюджета — char)."""
+    if name == "api":
+        from attrex.llm.client import ApiEncoder, LlmClient  # платные вызовы — только через клиент b3
+        from attrex.paths import PROCESSED
+
+        llm, embeddings = ctx.config.get("llm", {}), ctx.config.get("embeddings", {})
+        client = LlmClient.from_config(llm, embeddings, PROCESSED / llm.get("cache", "llm_cache.sqlite"))
+        if client.can_embed:
+            return ApiEncoder(client)
+        name = "char"
     if name == "char":
         return CharNgramEncoder()
-    raise ValueError(f"неизвестный encoder для retrieval: {name!r} (char; api — через llm/client.py, блок b3)")
+    raise ValueError(f"неизвестный encoder для retrieval: {name!r} (char или api)")
 
 
 def build(ctx: BuildContext) -> RetrievalExtractor:
@@ -157,7 +172,7 @@ def build(ctx: BuildContext) -> RetrievalExtractor:
     cfg = res.settings.retrieval
     default_attrs = [a for a, s in res.registry.attrs.items() if s.kind == "category" and a != "brand"]
     settings = RetrievalSettings.from_config(cfg, default_attrs)
-    encoder = make_encoder(cfg.get("encoder", "char"))
+    encoder = make_encoder(cfg.get("encoder", "char"), ctx)
     indexes = {}
     for attr_id in settings.attrs:
         support = res.dictionary.value_support(attr_id)

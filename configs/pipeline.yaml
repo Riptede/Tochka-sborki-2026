@@ -6,6 +6,7 @@ cascade:
   rules: attrex.normalize.rules
   parse: attrex.normalize.kv_parser
   retrieval: attrex.normalize.retrieval
+  llm: attrex.llm.extractor              # без llm.enabled, ключа и бюджета шаг ничего не делает
 
 # Шаг 0 — категория карточки: модуль с build(ctx) -> resolve(card) -> Card. null — только категория из БД
 # (фид или клики); карточки без неё получают схему из сквозных атрибутов schema.fallback_required.
@@ -43,6 +44,15 @@ llm:
   max_cards_per_call: 6
   self_consistency_samples: 3
   budget_rub: 0                # жёсткий лимит на прогон; 0 — вызовы запрещены
+  temperature: 0.7             # для self-consistency; при одном ответе — 0
+  max_tokens: 600              # потолок ответа: по нему бюджет оценивается до вызова
+  max_description_chars: 2000  # описание в промпте обрезаем
+  max_options: 30              # вариантов из справочника на атрибут в промпте
+  score: 0.85                  # сырой скор ответа, умножается на долю голосов self-consistency
+  cache: llm_cache.sqlite      # data/processed/: одинаковый запрос второй раз не оплачиваем
+  # рубли за 1 тыс. токенов: [вход, выход] — по ним считаются llm_cost_rub и бюджет
+  prices_rub_per_1k:
+    openai/gpt-oss-120b: [0.01586, 0.061]
 
 embeddings:
   backend: local               # временно e5-small на CPU ВМ; api — после сравнения на valid
@@ -50,6 +60,8 @@ embeddings:
   local_model: intfloat/multilingual-e5-small
   batch_size: 64
   budget_rub: 0
+  prices_rub_per_1k:
+    BAAI/bge-m3: 0.00061
 
 split:
   seed: 42
