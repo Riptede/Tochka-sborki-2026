@@ -9,6 +9,7 @@ from collections.abc import Iterable, Iterator
 from typing import Protocol
 
 from attrex.contracts import BuildContext, Candidate, Card, CategorySchema, Source, Step
+from attrex.normalize.dictionary import DictMatch
 from attrex.normalize.dimensions import DimensionLayout, find_dims
 from attrex.normalize.numbers import NumberMention, find_numbers, is_cross_unit, unit_fits
 from attrex.normalize.resources import NormalizeResources
@@ -101,6 +102,8 @@ class UnitNumberRule:
     выбирает ближайшее ключевое слово из configs/normalize.yaml — среди всех атрибутов реестра, а не только схемы:
     «оперативной памяти 8 ГБ» у смартфона — не встроенная память, даже если RAM в схеме нет. Без ключевого слова
     число берётся только из заголовка и только если единица однозначна для схемы карточки.
+    Единицы из anchored_units («т») берутся только с ключевым словом перед числом: «домкрат 3т», «плита 341Т»,
+    «1.6Т» у мотора — грузоподъёмность, модель и турбо, а не вес.
     """
     WINDOW_BEFORE = 30     # символов от ключевого слова до числа
     WINDOW_AFTER = 8       # «16GB RAM» — ключевое слово сразу после числа; дальше оно относится к следующему числу
@@ -116,6 +119,7 @@ class UnitNumberRule:
         # ключевое слово — целиком («высота», а не «высот»): расстояние до числа считаем от конца слова
         self.keywords = {a: re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, kws)) + r")\w*")
                          for a, kws in settings.keywords.items() if kws}
+        self.anchored_units = settings.anchored_units
 
     def apply(self, text: CardText, wanted: frozenset[str]) -> Iterator[Candidate]:
         if not wanted & self.attr_ids:
@@ -137,22 +141,27 @@ class UnitNumberRule:
     def _resolve(self, m: NumberMention, wanted: frozenset[str], spans: dict[str, list[tuple[int, int]]],
                  field: TextField) -> tuple[str | None, bool]:
         fits = [a for a, u in self.units.items() if unit_fits(m.unit, u)]
+        before_only = m.unit in self.anchored_units
         best, best_d = None, None
         for a in fits:
             for s, e in spans.get(a, ()):
-                d = self._distance(field.folded, s, e, m)
+                d = self._distance(field.folded, s, e, m, before_only)
                 if d is not None and (best_d is None or d < best_d):
                     best, best_d = a, d
         if best:
             return best, True
+        if before_only:
+            return None, False
         in_schema = [a for a in fits if a in wanted]
         if field.source is Source.TITLE and len(in_schema) == 1 and not is_cross_unit(m.unit, self.units[in_schema[0]]):
             return in_schema[0], False
         return None, False
 
-    def _distance(self, text: str, s: int, e: int, m: NumberMention) -> int | None:
+    def _distance(self, text: str, s: int, e: int, m: NumberMention, before_only: bool = False) -> int | None:
         if e <= m.start and m.start - e <= self.WINDOW_BEFORE and "\n" not in text[e:m.start]:
             return m.start - e
+        if before_only:
+            return None
         if s >= m.end and s - m.end <= self.WINDOW_AFTER and "\n" not in text[m.end:s]:
             return (s - m.end) * self.AFTER_PENALTY + 1
         return None
@@ -183,25 +192,50 @@ class DimensionsRule:
 
 
 class DictionaryRule:
-    """Справочные атрибуты (цвет, материал, процессор, накопитель, состояние) — по написаниям из справочника."""
+    """Справочные атрибуты (цвет, материал, процессор, накопитель, состояние) — по написаниям из справочника.
+
+    У атрибутов из title_tail_attrs (цвет) значение из заголовка надёжно, когда стоит в конце: «Смартфон … черный».
+    В середине заголовка это чаще часть названия, узора или совместимости («Чехол Red Line … голубой», «орнамент:
+    красные»): скор умножается на scores.title_inner. Внутри бренда из справочника («RED SOLUTION») не ищем вовсе.
+    """
     MIN_CHARS = 3     # «да», «-» в справочнике есть (шум эталона), но в тексте это не значение атрибута
 
-    def __init__(self, res: NormalizeResources, attr_ids: Iterable[str]):
-        self.res = res
+    def __init__(self, res: NormalizeResources, attr_ids: Iterable[str], layout: TitleLayout | None = None):
+        self.res, self.layout = res, layout
         self.attr_ids = frozenset(attr_ids)
 
     def apply(self, text: CardText, wanted: frozenset[str]) -> Iterator[Candidate]:
+        scores = self.res.settings.scores
+        tail_attrs = self.res.settings.title_tail_attrs & self.attr_ids & wanted
+        brand = self._brand_span(text.title) if tail_attrs else None
         for attr in sorted(self.attr_ids & wanted):
             for field in text.fields:
-                base = field_score(self.res.settings.scores, field)
-                best = {}
+                positional = attr in tail_attrs and field.source is Source.TITLE
+                best: dict[str, tuple[float, DictMatch]] = {}
                 for h in self.res.dictionary.find(attr, field.tokens):
                     if h.end - h.start < self.MIN_CHARS:
                         continue
-                    if h.value not in best or h.score > best[h.value].score:
-                        best[h.value] = h
-                for h in best.values():
-                    yield _candidate(attr, h.value, field, base * h.score, h.start, h.end)
+                    score = h.score
+                    if positional:
+                        if brand and h.start < brand[1] and h.end > brand[0]:
+                            continue
+                        if not _at_tail(field, h.end):
+                            score *= scores.title_inner
+                    if h.value not in best or score > best[h.value][0]:
+                        best[h.value] = (score, h)
+                for score, h in best.values():
+                    yield _candidate(attr, h.value, field, field_score(scores, field) * score, h.start, h.end)
+
+    def _brand_span(self, title: TextField) -> tuple[int, int] | None:
+        if self.layout is None:
+            return None
+        parts = self.layout.parse(title, self.res.dictionary)
+        return (parts.brand_start, parts.brand_end) if parts.brand else None
+
+
+def _at_tail(field: TextField, end: int) -> bool:
+    """После значения в поле нет слов — только числа, размеры и артикулы («… серый 200х90», «… черный (DP-30HL)»)."""
+    return all(any(ch.isdigit() for ch in t.text) for t in field.tokens if t.start >= end)
 
 
 class RulesExtractor:
@@ -224,7 +258,7 @@ def default_rules(res: NormalizeResources, layout: TitleLayout, dims: DimensionL
         MemoryPairRule(res),
         UnitNumberRule(res),
         DimensionsRule(dims, res),
-        DictionaryRule(res, dictionary_attrs),
+        DictionaryRule(res, dictionary_attrs, layout),
     ]
 
 

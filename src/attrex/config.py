@@ -14,6 +14,7 @@ from typing import Annotated, Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from attrex.normalize.units import UNIT_TABLE
 from attrex.paths import CONFIGS
 
 Share = Annotated[float, Field(ge=0, le=1)]
@@ -175,6 +176,17 @@ class PipelineConfig(Strict):
 
 
 # configs/normalize.yaml (b2): верхний уровень и ссылки на attr_id; вложенные параметры шагов читают сами шаги ---
+class CanonFilterSection(Strict):
+    min_offers: Positive = 1
+    exclude: list[str] = []
+    more_frequent_in: list[str] = []
+
+    @field_validator("exclude", mode="before")
+    @classmethod
+    def _as_str(cls, v):
+        return [str(x) for x in v or ()]
+
+
 class NormalizeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -184,11 +196,15 @@ class NormalizeConfig(BaseModel):
     key_functions: dict[str, str] = {}
     inflected: list[str] = []
     dictionary_min_support: Positive = 3
+    canon_filters: dict[str, CanonFilterSection] = {}
+    anchored_units: list[str] = []
+    title_tail_attrs: list[str] = []
     manual_weight: Positive = 20
     review_synonyms: str | None = None
     synonyms: dict[str, dict[str, str]] = {}
     compat_words: list[str] = []
-    scores: dict[Literal["title", "description", "unknown_value", "partial_match", "assumed"], Share] = {}
+    scores: dict[Literal["title", "description", "unknown_value", "partial_match", "assumed", "title_inner"],
+                 Share] = {}
     parse: dict[str, Any] = {}
     retrieval: dict[str, Any] = {}
     model_match: dict[str, Any] = {}
@@ -277,6 +293,12 @@ def validate_normalize(cfg: dict, path: Path = CONFIGS / "normalize.yaml") -> No
             _known(getattr(m, name), attrs, name)
         _known(m.inflected, attrs, "inflected")
         _known(m.retrieval.get("attrs", []), attrs, "retrieval.attrs")
+        _known(m.canon_filters, attrs, "canon_filters")
+        _known({a for f in m.canon_filters.values() for a in f.more_frequent_in}, attrs, "canon_filters.more_frequent_in")
+        _known(m.title_tail_attrs, attrs, "title_tail_attrs")
+        unknown_units = sorted(set(m.anchored_units) - set(UNIT_TABLE))
+        if unknown_units:
+            raise ValueError(f"anchored_units: нет в UNIT_TABLE (normalize/units.py): {unknown_units}")
     except ValueError as e:
         raise ConfigError(f"{path.name}: {e}") from None
 

@@ -6,15 +6,18 @@
 - ручные синонимы из configs/normalize.yaml (английские цвета, «б/у»).
 Одно написание бывает у разных канонов («мятный» → «зеленый» или «мятный»): выбираем самый частый,
 доля его голосов — score совпадения.
+Шумные каноны фасета («стекло», «матовый» как цвет) отсекает CanonFilter атрибута (configs/normalize.yaml,
+canon_filters): вместе с каноном уходят и все написания, которые голосовали за него.
 """
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
 import duckdb
 
 from attrex.normalize.keys import KeyFn
 from attrex.normalize.text import Token, phrase_key, stem
+from attrex.normalize.units import canon_text
 
 MAX_WORDS = 6   # длиннее написания в тексте не ищем
 
@@ -32,6 +35,49 @@ _GOLD_SQL = """
     WHERE g.value IS NOT NULL AND g.attr_id IN (SELECT unnest(?))
     GROUP BY 1, 2, 3
 """
+_CANON_OFFERS_SQL = """
+    SELECT g.attr_id, g.value, count(DISTINCT g.sku_id)
+    FROM core_gold g JOIN core_splits s USING (sku_id)
+    WHERE s.fold IN (SELECT unnest(?)) AND g.value IS NOT NULL AND g.attr_id IN (SELECT unnest(?))
+    GROUP BY 1, 2
+"""
+
+CanonOffers = Mapping[tuple[str, str], int]     # (attr_id, канон) → сколько офферов фолдов знаний с этим эталоном
+
+
+@dataclass(frozen=True)
+class CanonFilter:
+    """Какие каноны атрибута не берём значениями: редкие, из явного списка и те, что в эталоне чаще бывают
+    значением другого атрибута («стекло», «латунь» — материал, а не цвет)."""
+    min_offers: int = 1
+    exclude: frozenset[str] = frozenset()
+    more_frequent_in: tuple[str, ...] = ()
+
+    def not_a_value(self, attr_id: str, canon: str, offers: CanonOffers) -> bool:
+        """Не значение атрибута вовсе (отделка, материал): не берём ни канон, ни такое написание."""
+        n = offers.get((attr_id, canon), 0)
+        return canon in self.exclude or any(offers.get((other, canon), 0) > n for other in self.more_frequent_in)
+
+    def drops(self, attr_id: str, canon: str, offers: CanonOffers) -> bool:
+        """Канон не берём. Редкий канон — всё же значение: его написание остаётся голосом за другие каноны
+        («мокрый асфальт» → «серый»)."""
+        return offers.get((attr_id, canon), 0) < self.min_offers or self.not_a_value(attr_id, canon, offers)
+
+    def apply(self, attr_id: str, rows: list[tuple[str, str, str, int]], offers: CanonOffers
+              ) -> list[tuple[str, str, str, int]]:
+        canons = {c for a, _, c, _ in rows if a == attr_id}
+        banned = {c for c in canons if self.drops(attr_id, c, offers)}
+        words = {c for c in canons if self.not_a_value(attr_id, c, offers)} | self.exclude
+        return [r for r in rows if r[0] != attr_id or (r[2] not in banned and canon_text(r[1]) not in words)]
+
+
+def canon_offers_of(rows: Iterable[tuple[str, str, str, int]]) -> dict[tuple[str, str], int]:
+    """Без БД (тесты): офферы канона — голоса строк, где написание совпадает с каноном."""
+    out: dict[tuple[str, str], int] = defaultdict(int)
+    for attr_id, surface, canon, n in rows:
+        if surface == canon:
+            out[attr_id, canon] += n
+    return dict(out)
 
 
 @dataclass(frozen=True)
@@ -70,13 +116,21 @@ class RefDictionary:
 
     @classmethod
     def from_rows(cls, rows: Iterable[tuple[str, str, str, int]], key_fns: dict[str, KeyFn] | None = None,
-                  inflected: Iterable[str] = (), min_support: int = 1) -> "RefDictionary":
+                  inflected: Iterable[str] = (), min_support: int = 1,
+                  canon_filters: Mapping[str, CanonFilter] | None = None,
+                  canon_offers: CanonOffers | None = None) -> "RefDictionary":
         """rows: (attr_id, написание, канон, голоса).
 
         Написание продавца, которое не совпадает ни с одним каноном, берём только при min_support голосов:
-        в сырых значениях фида много шума («листья» как материал). Сами каноны остаются всегда — и редкие бренды тоже.
+        в сырых значениях фида много шума («листья» как материал). Сами каноны остаются — и редкие бренды тоже,
+        кроме отсечённых canon_filters атрибута (canon_offers — сколько офферов у канона; без него — по rows).
         """
         key_fns = key_fns or {}
+        if canon_filters:
+            rows = list(rows)
+            offers = canon_offers if canon_offers is not None else canon_offers_of(rows)
+            for attr_id, f in sorted(canon_filters.items()):
+                rows = f.apply(attr_id, rows, offers)
         votes: dict[str, dict[str, Counter]] = defaultdict(lambda: defaultdict(Counter))
         canon_keys: dict[str, set[str]] = defaultdict(set)
         words: dict[str, Counter] = defaultdict(Counter)    # attr_id → ключ → длина написания в словах
@@ -95,10 +149,14 @@ class RefDictionary:
     @classmethod
     def from_db(cls, con: duckdb.DuckDBPyConnection, folds: Sequence[str], attrs: Sequence[str],
                 extra_rows: Iterable[tuple[str, str, str, int]] = (), key_fns: dict[str, KeyFn] | None = None,
-                inflected: Iterable[str] = (), min_support: int = 1) -> "RefDictionary":
+                inflected: Iterable[str] = (), min_support: int = 1,
+                canon_filters: Mapping[str, CanonFilter] | None = None) -> "RefDictionary":
         attrs, folds = list(attrs), list(folds)
         rows = con.execute(_GOLD_SQL, [folds, attrs, attrs]).fetchall()
-        return cls.from_rows([*rows, *extra_rows], key_fns, inflected, min_support)
+        offers = None
+        if canon_filters:
+            offers = {(a, v): n for a, v, n in con.execute(_CANON_OFFERS_SQL, [folds, attrs]).fetchall()}
+        return cls.from_rows([*rows, *extra_rows], key_fns, inflected, min_support, canon_filters, offers)
 
     def attrs(self) -> set[str]:
         return set(self._exact)
@@ -133,6 +191,15 @@ class RefDictionary:
         """Самое длинное написание, которое начинается с токена i."""
         found = self._longest_at(attr_id, tokens, i)
         return found[0] if found else None
+
+    def matches_at(self, attr_id: str, tokens: Sequence[Token], i: int) -> list[DictMatch]:
+        """Все написания, которые начинаются с токена i, от самого длинного к самому короткому."""
+        out = []
+        for n in range(min(self._max_words.get(attr_id, 0), len(tokens) - i), 0, -1):
+            hit = self._match(attr_id, [t.text for t in tokens[i:i + n]])
+            if hit:
+                out.append(replace(hit, start=tokens[i].start, end=tokens[i + n - 1].end))
+        return out
 
     def _longest_at(self, attr_id: str, tokens: Sequence[Token], i: int) -> tuple[DictMatch, int] | None:
         for n in range(min(self._max_words.get(attr_id, 0), len(tokens) - i), 0, -1):

@@ -105,3 +105,57 @@ def test_year_is_not_weight(rules):
     card = Card(sku_id=5, title="Коврик автомобильный KIA Ceed 2012 г.", description="Вес 1,5 кг")
     got = values(rules.extract(card, CategorySchema(None, ("weight",)), []))
     assert got == {"weight": {"1.5"}}
+
+
+@pytest.mark.parametrize("title, description, expected", [
+    ("Домкрат AutoProfi гидравлический 3т (DP-30HL)", "", {}),                  # грузоподъёмность
+    ("Плита электрическая Мечта 341Т белая", "", {}),                            # модель
+    ("Домкрат подкатной", "Грузоподъемность 2 т, вес 15 кг", {"weight": {"15"}}),  # «вес» после тонн — не про них
+    ("Прицеп легковой", "Полная масса 0,75 т", {"weight": {"750"}}),             # ключевое слово перед числом
+])
+def test_tons_need_weight_keyword_before(rules, title, description, expected):
+    card = Card(sku_id=7, title=title, description=description)
+    assert values(rules.extract(card, CategorySchema(None, ("weight",)), [])) == expected
+
+
+def test_color_in_title_tail_scores_higher(rules):
+    schema = CategorySchema(None, ("color",))
+    tail = rules.extract(Card(8, "Подушка декоративная 365home 40x40 голубой"), schema, [])
+    inner = rules.extract(Card(9, "Подушка декоративная 365home голубой орнамент 40x40"), schema, [])
+    assert [c.value for c in tail] == [c.value for c in inner] == ["голубой"]
+    assert inner[0].score < tail[0].score                     # в середине заголовка цвет — часто узор или название
+
+
+def test_color_word_inside_brand_is_not_color(dims):
+    from attrex.normalize.resources import NormalizeResources
+    from attrex.normalize.title import TitleLayout
+
+    res = NormalizeResources.from_rows([("brand", "red line", "red line", 30), ("color", "голубой", "голубой", 30)])
+    layout = TitleLayout.learn([("Чехол Red Line для iPhone", "Red Line")] * 3, min_count=2)
+    rules = RulesExtractor(default_rules(res, layout, dims))
+    got = values(rules.extract(Card(10, "Чехол Red Line силикон голубой"), CategorySchema(None, ("color",)), []))
+    assert got == {"color": {"голубой"}}                      # «red» из бренда — не «красный»
+
+
+def test_brand_prefix_far_more_frequent_wins(dims):
+    from attrex.normalize.resources import NormalizeResources
+    from attrex.normalize.title import TitleLayout
+
+    res = NormalizeResources.from_rows([("brand", "xiaomi", "xiaomi", 2000), ("brand", "xiaomi redmi", "xiaomi redmi", 10),
+                                        ("brand", "tp-link", "tp-link", 50)])
+    rows = [("Смартфон Xiaomi Redmi 12", "Xiaomi")] * 3
+    title = TextField(Source.TITLE, "Смартфон Xiaomi Redmi Note 13 Pro 8/256GB")
+    assert TitleLayout.learn(rows, min_count=2).parse(title, res.dictionary).brand.value == "xiaomi redmi"
+    layout = TitleLayout.learn(rows, min_count=2, brand_prefix_ratio=10)
+    assert layout.parse(title, res.dictionary).brand.value == "xiaomi"
+    got = values(RulesExtractor(default_rules(res, layout, dims)).extract(
+        Card(11, title.text), CategorySchema(761, ("brand", "model")), []))
+    assert got == {"brand": {"xiaomi"}, "model": {"redmi note 13 pro"}}
+
+
+def test_assumed_ssd_cannot_pass_grounding(rules, res):
+    """«16/512GB» не называет тип накопителя: SSD достроен правилом — значение только на ручную проверку."""
+    card = Card(sku_id=12, title="Ноутбук HUAWEI MateBook D16 16/512GB", category_id=987)
+    drive = [c for c in rules.extract(card, CategorySchema(987, LAPTOP), []) if c.attr_id == "drive"]
+    assert [c.value for c in drive] == ["ssd 512 гб"]
+    assert not res.grounding.check(card, drive[0])

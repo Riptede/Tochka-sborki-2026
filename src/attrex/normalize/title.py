@@ -36,10 +36,12 @@ class TitleParts:
 
 
 class TitleLayout:
-    def __init__(self, prefixes: Iterable[str], max_brand_offset: int = 2, compat_words: Iterable[str] = ()):
+    def __init__(self, prefixes: Iterable[str], max_brand_offset: int = 2, compat_words: Iterable[str] = (),
+                 brand_prefix_ratio: float = 0.0):
         self.prefixes = frozenset(prefixes)
         self.max_brand_offset = max_brand_offset
         self.compat_words = frozenset(compat_words)
+        self.brand_prefix_ratio = brand_prefix_ratio
 
     @classmethod
     def learn(cls, rows: Iterable[tuple[str, str]], min_count: int = 3, **kwargs) -> "TitleLayout":
@@ -56,7 +58,8 @@ class TitleLayout:
     def from_context(cls, ctx: BuildContext) -> "TitleLayout":
         s = load_settings()
         rows = ctx.con.execute(_ROWS_SQL, [list(ctx.knowledge_folds)]).fetchall()
-        return cls.learn(rows, s.min_prefix_count, max_brand_offset=s.max_brand_offset, compat_words=s.compat_words)
+        return cls.learn(rows, s.min_prefix_count, max_brand_offset=s.max_brand_offset, compat_words=s.compat_words,
+                         brand_prefix_ratio=s.brand_prefix_ratio)
 
     def prefix_len(self, tokens: list[Token]) -> int:
         """Сколько первых слов заголовка — известный префикс (самый длинный); хотя бы одно слово оставляем бренду."""
@@ -74,13 +77,26 @@ class TitleLayout:
                 break
             if i > 0 and toks[i - 1].text in self.compat_words:   # «чехол для Samsung» — совместимость, не бренд
                 continue
-            hit = brands.find_at("brand", toks, i)
+            hit = self._brand_at(brands, toks, i)
             if hit:
                 return TitleParts(hit, hit.start, hit.end, k > 0, offset)
         # бренда нет в справочнике, но префикс известен: бренд — слово сразу после префикса
         if 0 < k < len(toks) and toks[k].text not in self.compat_words:
             return TitleParts(None, toks[k].start, toks[k].end, True)
         return TitleParts(None, -1, -1, k > 0)
+
+    def _brand_at(self, brands: RefDictionary, toks: list[Token], i: int) -> DictMatch | None:
+        """Самое длинное написание бренда с токена i. Но если его начало — бренд во много раз частотнее
+        («xiaomi» у 2 тыс. офферов, «xiaomi redmi» — у 10), бренд — начало, а остаток уже модель:
+        в эталоне «xiaomi» + «redmi note 13 pro»."""
+        hits = brands.matches_at("brand", toks, i)
+        if not hits:
+            return None
+        if self.brand_prefix_ratio > 0:
+            for h in hits[1:]:
+                if h.support >= self.brand_prefix_ratio * hits[0].support:
+                    return h
+        return hits[0]
 
 
 def _find_sublist(words: list[str], part: list[str]) -> int:
