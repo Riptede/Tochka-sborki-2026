@@ -10,7 +10,9 @@ import argparse
 from pathlib import Path
 
 from attrex import paths
+from attrex.db import require_raw
 from attrex.db.build import BuildConfig, build
+from attrex.db.feed import feed_cached
 
 
 def main() -> None:
@@ -23,6 +25,7 @@ def main() -> None:
     ap.add_argument("--memory-limit", default="3GB", help="лимит памяти DuckDB")
     ap.add_argument("--threads", type=int, default=4)
     a = ap.parse_args()
+    require_raw(a.raw, need_feed=a.reparse or not feed_cached(a.interim))
     counts = build(BuildConfig(raw_dir=a.raw, interim_dir=a.interim, db_path=a.db, reparse=a.reparse,
                                fast_pickle=a.fast_pickle, memory_limit=a.memory_limit, threads=a.threads))
     width = max(map(len, counts))
