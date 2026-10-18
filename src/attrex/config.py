@@ -105,6 +105,8 @@ class LlmSection(Strict):
     budget_rub: Rub = 0
     temperature: Annotated[float, Field(ge=0, le=2)] = 0
     max_tokens: Positive = 600
+    timeout_s: Annotated[float, Field(gt=0)] = 60
+    max_retries: Annotated[int, Field(ge=0)] = 2
     max_description_chars: Positive = 2000
     max_options: Positive = 30
     score: Share = 0.85

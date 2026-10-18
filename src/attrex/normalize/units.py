@@ -91,6 +91,8 @@ def to_canonical_number(value: str | None, unit: str | None, target_unit: str) -
     u = (unit or m.group(2) or "").strip().lower().replace("ё", "е")
     if not u:
         return fmt_number(x)
+    if u == target_unit.lower():                     # уже в единице реестра: «6.6 in» из ответа LLM
+        return fmt_number(x)
     if (target_unit, u) in CROSS:
         return fmt_number(x * CROSS[(target_unit, u)])
     canon, k = UNIT_TABLE.get(u, (None, None))
