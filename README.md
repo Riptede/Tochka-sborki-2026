@@ -64,7 +64,7 @@ uv run python scripts/demo.py --title "Ноутбук ASUS VivoBook 15 Intel Cor
 | # | Команда | Что делает | Время, память |
 |---|---|---|---|
 | 1 | `uv run pytest` | 138 тестов: окружение, конфиги, каждый шаг, сквозной прогон | 30 с |
-| 2 | `uv run python scripts/build_db.py` | `data/attrex.duckdb`: очищенные карточки, эталон в каноне, схемы категорий, справочники, разбиение | 13 мин при первом разборе `skus.pkl`, далее 3 мин; до 4 ГБ |
+| 2 | `uv run python scripts/build_db.py` | `data/attrex.duckdb`: очищенные карточки, эталон в каноне и где он лежит в тексте, схемы категорий, справочники, разбиение | 13 мин при первом разборе `skus.pkl`, далее 6–7 мин; до 4 ГБ |
 | 3 | `uv run python scripts/run_pipeline.py --workers 3` | каскад по всем 1,48 млн карточек → `outputs/<run_id>/predictions.parquet` и `pred_predictions` | ≈35 мин |
 | 4 | `uv run python scripts/evaluate.py --run-id <run_id> --folds test,holdout_category` | метрики → `outputs/<run_id>/report.md` | 1 мин |
 | 5 | `uv run python scripts/export.py --run-id <run_id>` | файл сдачи `outputs/predictions.parquet` и `.csv` | 1 мин |

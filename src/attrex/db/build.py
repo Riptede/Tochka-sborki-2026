@@ -1,7 +1,7 @@
 """Сборка data/attrex.duckdb из файлов организатора (блок b1).
 
 Порядок: feed (skus.pkl → parquet) → raw_* → core_attr_name_map → core_cards → core_gold → core_ref_values →
-core_category_schema → core_splits → core_traffic_weights.
+core_gold.in_text → core_category_schema → core_splits → core_traffic_weights.
 
 БД собирается во временный файл и в конце атомарно заменяет основной: читатели никогда не видят недостроенную БД.
 Всё тяжёлое делает DuckDB с лимитом памяти; Python обрабатывает только уникальные значения атрибутов.
@@ -17,11 +17,14 @@ import yaml
 
 from attrex import paths
 from attrex.db.feed import feed_cached, parse_feed
+from attrex.db.in_text import Locator, locate_chunks
 from attrex.normalize.units import canon_model, canon_text, to_canonical_number
 from attrex.registry import Registry, load_registry
 
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 
+# составной фасет «серый/серебристый», «полипропилен/резина» — несколько значений эталона
+SPLIT_COMPOSITE = ("color", "material")
 # шаблонные фразы продавцов, которые не несут характеристик
 BOILERPLATE = ["Лучшие товары из Китая"]
 # порядок важен: сначала &amp; (бывает двойное кодирование «&amp;laquo;»), потом остальные, в том числе &lt;/&gt;:
@@ -147,9 +150,32 @@ def build_cards(con: duckdb.DuckDBPyConnection, cfg: BuildConfig) -> None:
     con.execute("DROP TABLE desc_clean")
 
 
+def dedupe_tokens(s: str | None) -> str | None:
+    """Повтор в записи продавца: «apple m2 max apple m2 max 3.5 ггц» → «apple m2 max 3.5 ггц»,
+    «intel core i3 i3-1115g4» → «intel core i3-1115g4»."""
+    if s is None:
+        return None
+    toks = s.split()
+    changed = True
+    while changed:
+        changed = False
+        for n in range(len(toks) // 2, 0, -1):
+            for i in range(len(toks) - 2 * n + 1):
+                if toks[i:i + n] == toks[i + n:i + 2 * n]:
+                    del toks[i + n:i + 2 * n]
+                    changed = True
+                    break
+            if changed:
+                break
+    toks = [t for i, t in enumerate(toks) if not (i + 1 < len(toks) and toks[i + 1].startswith(t + "-"))]
+    return " ".join(toks)
+
+
 def _canon_str(attr_id: str, value: str | None) -> str | None:
     # модель в фиде записана с памятью, цветом и артикулом — в эталон идёт только название модели
-    return canon_model(value) if attr_id == "model" else canon_text(value)
+    if attr_id == "model":
+        return canon_model(value)
+    return dedupe_tokens(canon_text(value)) if attr_id == "cpu" else canon_text(value)
 
 
 def _canon_values(con: duckdb.DuckDBPyConnection, reg: Registry) -> pd.DataFrame:
@@ -218,21 +244,26 @@ def build_gold(con: duckdb.DuckDBPyConnection, reg: Registry, log) -> None:
         INSERT INTO core_gold
         SELECT f.sku_id, f.attr_id, CASE WHEN c.is_placeholder THEN NULL ELSE c.value_canon END,
                NULL, f.raw, NULL, c.is_placeholder, NULL
-        FROM gold_fields f JOIN field_canon c USING (attr_id, raw);
-
+        FROM gold_fields f JOIN field_canon c USING (attr_id, raw)""")
+    placeholders = sorted({canon_text(p) for p in reg.placeholders} - {None})
+    con.execute("""
+        -- составной фасет «серый/серебристый» — несколько значений: верно любое из них
         INSERT INTO core_gold
-        SELECT g.sku_id, g.attr_id, v.value, CASE WHEN g.kind = 'number' THEN g.unit END, g.raw_s, g.raw_f, false, NULL
-        FROM gold_params g, unnest(g.chosen) AS v(value)
-        WHERE len(coalesce(g.chosen, [])) > 0
-          AND NOT EXISTS (SELECT 1 FROM gold_fields f WHERE f.sku_id = g.sku_id AND f.attr_id = g.attr_id);
-
+        SELECT DISTINCT g.sku_id, g.attr_id, trim(p.part), CASE WHEN g.kind = 'number' THEN g.unit END,
+               g.raw_s, g.raw_f, false, NULL
+        FROM gold_params g, unnest(g.chosen) AS v(value),
+             unnest(CASE WHEN g.attr_id IN (SELECT unnest($split)) THEN string_split(v.value, '/')
+                         ELSE [v.value] END) AS p(part)
+        WHERE len(coalesce(g.chosen, [])) > 0 AND trim(p.part) <> '' AND trim(p.part) NOT IN (SELECT unnest($ph))
+          AND NOT EXISTS (SELECT 1 FROM gold_fields f WHERE f.sku_id = g.sku_id AND f.attr_id = g.attr_id)""",
+                {"split": list(SPLIT_COMPOSITE), "ph": placeholders})
+    con.execute("""
         -- только заглушки: эталон есть, но это пропуск; метрики не считают его ошибкой модели
         INSERT INTO core_gold
         SELECT g.sku_id, g.attr_id, NULL, NULL, g.raw_s, g.raw_f, true, NULL
         FROM gold_params g
         WHERE len(coalesce(g.chosen, [])) = 0 AND g.any_ph
-          AND NOT EXISTS (SELECT 1 FROM gold_fields f WHERE f.sku_id = g.sku_id AND f.attr_id = g.attr_id);
-    """)
+          AND NOT EXISTS (SELECT 1 FROM gold_fields f WHERE f.sku_id = g.sku_id AND f.attr_id = g.attr_id)""")
     dropped = con.execute("""
         SELECT attr_id, count(*) FROM gold_params
         WHERE len(coalesce(chosen, [])) = 0 AND NOT any_ph GROUP BY 1 ORDER BY 2 DESC""").fetchall()
@@ -254,13 +285,60 @@ def build_ref_values(con: duckdb.DuckDBPyConnection, reg: Registry) -> None:
                    lower(trim(regexp_replace(replace(p.value, 'ё', 'е'), '\\s*/\\s*', '/', 'g'))) AS raw
             FROM raw_params p JOIN core_attr_name_map m ON trim(p.param_name) = m.param_name
             WHERE m.layer = 'search'
+        ), own AS (     -- все значения эталона карточки: у составного фасета сырое «черный» — не синоним «серый»
+            SELECT sku_id, attr_id, list(value) AS vals FROM core_gold WHERE value IS NOT NULL GROUP BY 1, 2
         )
         SELECT g.attr_id, g.value,
-               coalesce(list(DISTINCT s.raw) FILTER (WHERE s.raw IS NOT NULL AND s.raw <> g.value), []),
+               coalesce(list(DISTINCT s.raw) FILTER (WHERE s.raw IS NOT NULL AND NOT list_contains(o.vals, s.raw)), []),
                count(DISTINCT g.sku_id)
-        FROM core_gold g LEFT JOIN raw_search s ON s.sku_id = g.sku_id AND s.attr_id = g.attr_id
+        FROM core_gold g JOIN own o USING (sku_id, attr_id)
+        LEFT JOIN raw_search s ON s.sku_id = g.sku_id AND s.attr_id = g.attr_id
         WHERE g.value IS NOT NULL AND g.attr_id IN ({", ".join(f"'{a}'" for a in cats)})
         GROUP BY 1, 2""")
+
+
+def _synonyms(con: duckdb.DuckDBPyConnection) -> dict[tuple[str, str], list[str]]:
+    """Написания значения: сырые _search из фида (core_ref_values) и ручные синонимы configs/normalize.yaml."""
+    out: dict[tuple[str, str], list[str]] = {}
+    for a, v, syn in con.execute("SELECT attr_id, value, synonyms FROM core_ref_values").fetchall():
+        out[(a, v)] = list(syn or [])
+    manual = yaml.safe_load((paths.CONFIGS / "normalize.yaml").read_text(encoding="utf-8")).get("synonyms") or {}
+    for a, spellings in manual.items():
+        for spelling, canon in (spellings or {}).items():
+            out.setdefault((a, canon_text(str(canon))), []).append(str(spelling))
+    return out
+
+
+def build_in_text(con: duckdb.DuckDBPyConnection, reg: Registry, log, workers: int = 1, chunk: int = 10_000) -> None:
+    """core_gold.in_text: где в тексте карточки лежит значение эталона (db/in_text.py). Карточки — пачками по sku_id,
+    пачки разбираются в workers процессах: основа каждого слова описания — самое долгое в сборке."""
+    locator = Locator({a: (s.kind, s.unit) for a, s in reg.attrs.items()}, _synonyms(con))
+    skus = [r[0] for r in con.execute(
+        "SELECT DISTINCT sku_id FROM core_gold WHERE value IS NOT NULL ORDER BY 1").fetchall()]
+    con.execute("CREATE TEMP TABLE gold_in_text (sku_id BIGINT, attr_id VARCHAR, value VARCHAR, in_text VARCHAR)")
+
+    def chunks():
+        for i in range(0, len(skus), chunk):
+            lo, hi = skus[i], skus[min(i + chunk, len(skus)) - 1]
+            cards = con.execute("SELECT sku_id, title, coalesce(description, '') FROM core_cards "
+                                "WHERE sku_id BETWEEN ? AND ?", [lo, hi]).fetchall()
+            rows = con.execute("SELECT DISTINCT sku_id, attr_id, value FROM core_gold "
+                               "WHERE value IS NOT NULL AND sku_id BETWEEN ? AND ?", [lo, hi]).fetchall()
+            yield cards, rows
+
+    for located in locate_chunks(locator, chunks(), workers):
+        part = pd.DataFrame(located, columns=["sku_id", "attr_id", "value", "in_text"])
+        con.register("in_text_part", part)
+        con.execute("INSERT INTO gold_in_text SELECT * FROM in_text_part")
+        con.unregister("in_text_part")
+    con.execute("""
+        UPDATE core_gold g SET in_text = t.in_text FROM gold_in_text t
+        WHERE g.sku_id = t.sku_id AND g.attr_id = t.attr_id AND g.value = t.value""")
+    con.execute("DROP TABLE gold_in_text")
+    found = con.execute("""
+        SELECT round(100 * avg((in_text IN ('title', 'description', 'synonym'))::INT), 1)
+        FROM core_gold WHERE value IS NOT NULL""").fetchone()[0]
+    log(f"значение эталона есть в тексте карточки: {found}% строк")
 
 
 def build_category_schema(con: duckdb.DuckDBPyConnection, reg: Registry, pcfg: dict) -> None:
@@ -388,6 +466,7 @@ def build(cfg: BuildConfig | None = None, log=print) -> dict[str, int]:
             ("core_cards", lambda: build_cards(con, cfg)),
             ("core_gold", lambda: build_gold(con, reg, log)),
             ("core_ref_values", lambda: build_ref_values(con, reg)),
+            ("core_gold.in_text", lambda: build_in_text(con, reg, log, workers=cfg.threads)),
             ("core_category_schema", lambda: build_category_schema(con, reg, pcfg)),
             ("core_splits", lambda: build_splits(con, pcfg)),
             ("core_traffic_weights", lambda: build_traffic_weights(con)),
