@@ -74,6 +74,22 @@ def test_answer_not_by_schema_is_dropped_and_counted(res, fake):
     assert ex.drain_usage().llm_invalid == 2
 
 
+def test_prompt_label_and_markdown_are_cut_from_evidence(res, fake):
+    answer = {"battery": {"value": 4000, "unit": "мАч", "evidence": "Описание: Ёмкость аккумулятора **4000 мАч**"},
+              "color": {"value": "серый", "evidence": "Заголовок: graphite"},              # не из заголовка — отсеется
+              "screen_diag": NULL_NUM}
+    out = {c.attr_id: c for c in make(res, fake([answer]), samples=1).extract(CARD, SCHEMA, [BRAND])}
+    assert out["battery"].evidence == "Ёмкость аккумулятора 4000 мАч"
+    assert out["color"].evidence == "graphite"                                # подпись поля промпта — не цитата
+
+
+def test_options_do_not_depend_on_row_order(fake):
+    rows = [("color", c, c, 5) for c in ("синий", "белый", "черный")]
+    a = make(NormalizeResources.from_rows(rows), fake())._options("color", [])
+    b = make(NormalizeResources.from_rows(rows[::-1]), fake())._options("color", [])
+    assert a == b
+
+
 def test_api_failure_does_not_stop_the_run(res, fake):
     t = fake(fail_always=ConnectionError("connection reset by peer"))
     ex = make(res, t)

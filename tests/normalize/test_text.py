@@ -12,6 +12,7 @@ def test_fold_keeps_length_and_positions():
     assert f == 'экран 6.7" черный titan'
     i = f.index("черный")
     assert s[i:i + 6] == "Чёрный"
+    assert fold("6,67‑дюймовым") == "6.67-дюймовым"          # неразрывный дефис — как обычный
 
 
 def test_tokens_and_phrase_key():

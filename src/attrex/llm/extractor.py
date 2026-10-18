@@ -10,6 +10,7 @@
 без цитаты из этой карточки оно отбрасывается (счётчик Usage.llm_ungrounded).
 Self-consistency: несколько ответов с температурой; значение — по большинству, скор — доля голосов.
 """
+import re
 from collections import Counter
 from dataclasses import dataclass
 
@@ -21,6 +22,10 @@ from attrex.llm.schema import AnswerSchema, AttrField
 from attrex.normalize.resources import NormalizeResources
 from attrex.normalize.text import fold
 from attrex.paths import PROCESSED
+
+# что модель добавляет к цитате сверх текста карточки: подпись поля из промпта и выделение markdown
+_PROMPT_LABEL = re.compile(r"^\s*(?:заголовок|описание)\s*:\s*", re.IGNORECASE)
+_MARKUP = re.compile(r"\*\*|__|`")
 
 SYSTEM = (
     "Ты извлекаешь характеристики товара из текста его карточки. Бери значение только из текста: если его там нет, "
@@ -113,7 +118,8 @@ class LlmExtractor:
             return []
         seen = [c.value for c in prior if c.attr_id == attr_id]
         support = self.res.dictionary.value_support(attr_id)
-        frequent = sorted(support, key=lambda v: -support[v])
+        # при равной частоте — по алфавиту: промпт и ключ кэша не должны зависеть от порядка строк из БД
+        frequent = sorted(support, key=lambda v: (-support[v], v))
         out: list[str] = []
         for v in [*seen, *frequent]:
             if v not in out:
@@ -148,7 +154,7 @@ class LlmExtractor:
         if raw is None:
             return None
         self._stats = self._stats + Usage(llm_values=1)
-        evidence = (item.get("evidence") or "").strip()
+        evidence = clean_evidence(item.get("evidence") or "")
         canon = self.res.normalizer.canonical(field.attr_id, raw) if evidence else None
         cand = None
         if canon is not None:
@@ -158,6 +164,12 @@ class LlmExtractor:
             self._stats = self._stats + Usage(llm_ungrounded=1)
             return None
         return cand
+
+
+def clean_evidence(text: str) -> str:
+    """Цитата без того, что добавила модель: «Заголовок: …» из промпта и **выделение**. Остальное — как в ответе:
+    дальше grounding проверяет, что цитата есть в карточке и подтверждает значение."""
+    return _PROMPT_LABEL.sub("", _MARKUP.sub("", text)).strip()
 
 
 def build(ctx: BuildContext) -> LlmExtractor:
