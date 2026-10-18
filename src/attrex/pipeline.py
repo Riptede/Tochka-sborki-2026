@@ -10,12 +10,14 @@ import importlib
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from functools import lru_cache
+from pathlib import Path
 from typing import Protocol
 
 import yaml
 
 from attrex.confidence import aggregate
 from attrex.confidence.aggregate import Aggregator, AttrDecision
+from attrex.config import validate_pipeline
 from attrex.contracts import BuildContext, Card, CategorySchema, Extractor, Prediction, Source, Status, Step, Usage
 from attrex.normalize.grounding import Grounding
 from attrex.normalize.resources import NormalizeResources
@@ -28,7 +30,9 @@ _SCHEMA_SQL = "SELECT category_id, attr_id, inherited_from FROM core_category_sc
 @lru_cache(maxsize=1)
 def load_config(path: str | None = None) -> dict:
     with open(path or CONFIGS / "pipeline.yaml", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    validate_pipeline(cfg, Path(path or CONFIGS / "pipeline.yaml"))
+    return cfg
 
 
 class CategoryResolver(Protocol):

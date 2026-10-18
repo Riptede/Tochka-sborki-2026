@@ -1,9 +1,11 @@
 """Параметры нормализатора из configs/normalize.yaml (блок b2)."""
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 
 import yaml
 
+from attrex.config import validate_normalize
 from attrex.normalize.text import fold
 from attrex.paths import CONFIGS
 
@@ -81,6 +83,7 @@ def load_settings(path: str | None = None) -> NormalizeSettings:
     """configs/normalize.yaml и синонимы из решений модераторов (review_synonyms, пишет b5); ручные — важнее."""
     with open(path or CONFIGS / "normalize.yaml", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
+    validate_normalize(cfg, Path(path or CONFIGS / "normalize.yaml"))
     review = CONFIGS / cfg["review_synonyms"] if cfg.get("review_synonyms") else None
     if review is not None and review.exists():
         learned = (yaml.safe_load(review.read_text(encoding="utf-8")) or {}).get("synonyms") or {}

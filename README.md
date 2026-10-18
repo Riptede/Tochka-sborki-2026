@@ -61,9 +61,14 @@ uv run python scripts/demo.py --title "Ноутбук ASUS VivoBook 15 Intel Cor
 Файлы организатора — в `data/raw/`: `skus.pkl`, `sku_desc.parquet`, `query_clicks.parquet`.
 Время и память — на 4 ядрах; на ВМ хакатона (7,8 ГБ, без swap) долгие шаги запускать в `tmux`.
 
+Переменные окружения — по шаблону `.env.example` (`cp .env.example .env`). Они нужны только для LLM и
+API-эмбеддингов: без ключа эти шаги пропускаются, остальной путь работает. Уже заданные переменные (на ВМ их задаёт
+платформа) важнее `.env`. Конфиги `configs/*.yaml` проверяются по схемам `src/attrex/config.py` при каждом запуске;
+проверить их вручную после правки: `uv run python -m attrex.config`.
+
 | # | Команда | Что делает | Время, память |
 |---|---|---|---|
-| 1 | `uv run pytest` | 138 тестов: окружение, конфиги, каждый шаг, сквозной прогон | 30 с |
+| 1 | `uv run pytest` | тесты: окружение, схемы конфигов, каждый шаг, сквозной прогон, выборка для демо | 30 с |
 | 2 | `uv run python scripts/build_db.py` | `data/attrex.duckdb`: очищенные карточки, эталон в каноне и где он лежит в тексте, схемы категорий, справочники, разбиение | 13 мин при первом разборе `skus.pkl`, далее 6–7 мин; до 4 ГБ |
 | 3 | `uv run python scripts/run_pipeline.py --workers 3` | каскад по всем 1,48 млн карточек → `outputs/<run_id>/predictions.parquet` и `pred_predictions` | ≈35 мин |
 | 4 | `uv run python scripts/evaluate.py --run-id <run_id> --folds test,holdout_category` | метрики → `outputs/<run_id>/report.md` | 1 мин |
@@ -78,8 +83,11 @@ uv run python scripts/make_results.py
 
 Полезные флаги `run_pipeline.py`: `--steps rules,parse` (подмножество шагов для ablation), `--fold valid`
 (только часть разбиения), `--limit 1000`, `--hide-category` (проверка шага 0: категория из БД скрыта),
-`--raw-confidence` (без калибровки). Разведочный анализ: `notebooks/01_eda.ipynb`
-(`uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb`, ≈15 мин, 3 ГБ).
+`--raw-confidence` (без калибровки).
+
+Разведочный анализ — `notebooks/01_eda.ipynb`; читать без Jupyter — [`docs/eda/`](docs/eda/README.md) (сводка,
+полный текст и графики). Перезапуск: `uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb`
+(≈15 мин, 3 ГБ).
 
 ## Результаты
 
@@ -111,7 +119,7 @@ uv run python scripts/make_results.py
 | Новые категории | Категория по заголовку для карточек без неё; при неуверенной категории — только сквозные атрибуты; holdout-категории не участвуют в подборе | `category/classifier.py`, `pipeline.py` |
 | Метрики по кейсу | P/R/F1 по каждому атрибуту, macro-F1 по категориям, F1 с весом по трафику (клики), вклад каждого шага (ablation) | `metrics/`, `scripts/evaluate.py` |
 | Ручная проверка и обратная связь | Очередь: сначала важные по трафику и неуверенные значения; решения модератора → синонимы в словарь и подсказки по порогам | `review/` |
-| Шесть артефактов | код — `src/`, `scripts/`; README — этот файл; EDA — `notebooks/01_eda.ipynb`; пайплайн — `scripts/run_pipeline.py`; файл предсказаний — `results/`; презентация — `docs/` | |
+| Шесть артефактов | код — `src/`, `scripts/`; README — этот файл; EDA — `notebooks/01_eda.ipynb` и [`docs/eda/`](docs/eda/README.md); пайплайн — `scripts/run_pipeline.py`; файл предсказаний — `results/`; презентация — `docs/` | |
 
 ## Риски и меры
 
@@ -151,8 +159,9 @@ uv run python -m attrex.review.feedback                                   # си
 ```
 
 Приоритет в очереди — клики карточки × вес атрибута по трафику × (1 − уверенность). Подтверждённые написания
-попадают в словарь нормализатора, и следующий прогон принимает их сам. Кликабельный прототип интерфейса
-модератора — `apps/review_prototype/index.html`.
+попадают в словарь нормализатора, и следующий прогон принимает их сам. Когда ставить `accept`, `fix` и `absent`,
+с примерами, — [протокол ручной проверки](docs/review_protocol.md). Кликабельный прототип интерфейса модератора
+на примерных данных — `apps/review_prototype/index.html`.
 
 ## LLM
 
@@ -163,7 +172,7 @@ uv run python -m attrex.review.feedback                                   # си
 ## Структура
 
 ```
-configs/        реестр атрибутов, пороги и параметры каскада, синонимы, калибровка
+configs/        реестр атрибутов, пороги и параметры каскада, синонимы, калибровка (схемы — src/attrex/config.py)
 src/attrex/     db/ — сборка БД (b1); category/, normalize/, confidence/ — шаг 0, правила, парсер, retrieval,
                 уверенность (b2); llm/ (b3); pipeline.py, runs.py, metrics/ (b4); review/ (b5)
 scripts/        build_db, run_pipeline, evaluate, export, make_results, demo, make_sample
@@ -172,7 +181,8 @@ results/        итоговые метрики и файл предсказан
 notebooks/      EDA
 apps/           прототип интерфейса модератора
 tests/          pytest
-docs/           материалы чекпоинтов
+docs/           EDA для чтения (eda/), протокол ручной проверки, материалы чекпоинтов
+.env.example    шаблон переменных окружения
 ```
 
 Правила разработки, архитектура и контракты между блоками — `CLAUDE.md`.

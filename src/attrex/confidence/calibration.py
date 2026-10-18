@@ -18,6 +18,8 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from attrex.config import validate_calibration
+
 GLOBAL = "*"
 
 
@@ -102,6 +104,7 @@ class IsotonicCalibrator:
     @classmethod
     def load(cls, path: Path) -> "IsotonicCalibrator":
         doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        validate_calibration(doc, path)
         curves = {k: Curve(tuple(c["x"]), tuple(c["y"]), c["n"]) for k, c in (doc.get("curves") or {}).items()}
         return cls(curves, doc.get("thresholds"), doc.get("meta"))
 

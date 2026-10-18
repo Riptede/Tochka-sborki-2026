@@ -16,6 +16,7 @@ import pandas as pd
 import yaml
 
 from attrex import paths
+from attrex.config import validate_pipeline
 from attrex.db.feed import feed_cached, parse_feed
 from attrex.db.in_text import Locator, locate_chunks
 from attrex.normalize.units import canon_model, canon_text, to_canonical_number
@@ -50,7 +51,9 @@ def _sql_path(p: Path) -> str:
 
 def _pipeline_cfg() -> dict:
     with open(paths.CONFIGS / "pipeline.yaml", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    validate_pipeline(cfg, paths.CONFIGS / "pipeline.yaml")
+    return cfg
 
 
 class _Log:
