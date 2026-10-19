@@ -1,8 +1,9 @@
 import pytest
 
 from attrex.contracts import Card, CategorySchema, Source, Step
+from attrex.normalize.dimensions import DimensionLayout, find_description_dims
 from attrex.normalize.rules import RulesExtractor, default_rules
-from attrex.normalize.text import TextField
+from attrex.normalize.text import TextField, fold
 
 from .conftest import MATTRESS, PILLOW
 
@@ -35,6 +36,27 @@ def test_title_layout(layout, res):
 def test_dimension_layout_learned_per_category(dims):
     assert dims.layout(MATTRESS, 2) == {0: ("width", 1.0)}               # второе число матраса — длина
     assert {a for a, _ in dims.layout(PILLOW, 2).values()} == {"width", "height"}
+
+
+def test_description_dims_cues_and_skips():
+    found = find_description_dims(fold("Прибор габаритами 342х342х95 мм. Экран 1920x1080. Упаковка 40x40x15 см."))
+    assert [d.values for d in found] == [("342", "342", "95")]          # экран и упаковка — не размеры товара
+    assert find_description_dims(fold("Набор 4 x 6 предметов")) == []    # без единицы и без «размер» — не размеры
+
+
+def test_description_dims_labeled_order(res, layout, dims):
+    rules = RulesExtractor(default_rules(res, layout, dims, DimensionLayout({})))
+    card = Card(sku_id=10, title="Стиральная машина Hi WM610W", category_id=1,
+                description="Размеры (ВхШхГ): 85х59,5х45 см. Загрузка 6 кг.")
+    got = values(rules.extract(card, CategorySchema(1, ("width", "height", "depth")), []), Source.DESCRIPTION)
+    assert got == {"height": {"85"}, "width": {"59.5"}, "depth": {"45"}}
+
+
+def test_description_dims_layout_learned():
+    rows = [(5, f"Габаритные размеры {h}x{w}x{d} см.", {"height": {h}, "width": {w}, "depth": {d}})
+            for h, w, d in (("26.2", "45.2", "35.3"), ("10", "30", "20"), ("12", "40", "25"))]
+    learned = DimensionLayout.learn(rows, ["width", "height", "depth"], min_support=2, finder=find_description_dims)
+    assert learned.layout(5, 3) == {0: ("height", 1.0), 1: ("width", 1.0), 2: ("depth", 1.0)}
 
 
 def test_phone(rules):

@@ -10,7 +10,8 @@ from typing import Protocol
 
 from attrex.contracts import BuildContext, Candidate, Card, CategorySchema, Source, Step
 from attrex.normalize.dictionary import DictMatch
-from attrex.normalize.dimensions import DimensionLayout, find_dims
+from attrex.normalize.dimensions import (DimensionLayout, DimsMention, find_description_dims, find_dims,
+                                         labeled_order)
 from attrex.normalize.numbers import NumberMention, find_numbers, is_cross_unit, unit_fits
 from attrex.normalize.resources import NormalizeResources
 from attrex.normalize.settings import Scores
@@ -178,22 +179,42 @@ def _looks_like_year(m: NumberMention) -> bool:
 
 
 class DimensionsRule:
-    """«100х155», «60x85x60 см» в заголовке → ширина, высота, глубина по выученной раскладке категории."""
+    """«100х155», «60x85x60 см» → ширина, высота, глубина по выученной раскладке категории.
 
-    def __init__(self, layout: DimensionLayout, res: NormalizeResources):
-        self.layout, self.scores = layout, res.settings.scores
+    Заголовок — своя раскладка; описание («габариты 8,6х31х28,6 см») — своя, а подпись порядка «(ШхВхГ)» рядом
+    с числами важнее раскладки.
+    """
+
+    def __init__(self, layout: DimensionLayout, res: NormalizeResources, description_layout: DimensionLayout | None = None):
+        self.layout, self.description_layout, self.scores = layout, description_layout, res.settings.scores
         self.attr_ids = frozenset(a for a, s in res.registry.attrs.items() if s.unit == "cm")
 
     def apply(self, text: CardText, wanted: frozenset[str]) -> Iterator[Candidate]:
-        title = text.title
-        dims = find_dims(title.folded)
+        dims = find_dims(text.title.folded)
+        if dims:
+            yield from self._by_layout(text.title, dims[0], self.layout, text.card.category_id, wanted)
+        if self.description_layout is None:
+            return
+        dims = find_description_dims(text.description.folded)
         if not dims:
             return
-        d = dims[0]
-        for pos, (attr, rate) in self.layout.layout(text.card.category_id, len(d.values)).items():
+        d, field = dims[0], text.description
+        order = labeled_order(field.folded, d)
+        if order is None:
+            yield from self._by_layout(field, d, self.description_layout, text.card.category_id, wanted)
+            return
+        for pos, attr in enumerate(order):
             value = d.value_cm(pos)
             if attr in wanted and value:
-                yield _candidate(attr, value, title, self.scores.title * rate, d.start, d.end, raw=d.values[pos])
+                yield _candidate(attr, value, field, self.scores.description, d.start, d.end, raw=d.values[pos])
+
+    def _by_layout(self, field: TextField, d: DimsMention, layout: DimensionLayout, category_id: int | None,
+                   wanted: frozenset[str]) -> Iterator[Candidate]:
+        for pos, (attr, rate) in layout.layout(category_id, len(d.values)).items():
+            value = d.value_cm(pos)
+            if attr in wanted and value:
+                yield _candidate(attr, value, field, field_score(self.scores, field) * rate, d.start, d.end,
+                                 raw=d.values[pos])
 
 
 class DictionaryRule:
@@ -255,14 +276,15 @@ class RulesExtractor:
         return [c for rule in self.rules if rule.attr_ids & wanted for c in rule.apply(text, wanted)]
 
 
-def default_rules(res: NormalizeResources, layout: TitleLayout, dims: DimensionLayout) -> list[Rule]:
+def default_rules(res: NormalizeResources, layout: TitleLayout, dims: DimensionLayout,
+                  description_dims: DimensionLayout | None = None) -> list[Rule]:
     """Набор правил базлайна. Справочные атрибуты, кроме бренда (его даёт раскладка заголовка), — по справочнику."""
     dictionary_attrs = [a for a, s in res.registry.attrs.items() if s.kind == "category" and a != "brand"]
     return [
         TitleBrandModelRule(layout, res),
         MemoryPairRule(res),
         UnitNumberRule(res),
-        DimensionsRule(dims, res),
+        DimensionsRule(dims, res, description_dims),
         DictionaryRule(res, dictionary_attrs, layout),
     ]
 
@@ -270,4 +292,5 @@ def default_rules(res: NormalizeResources, layout: TitleLayout, dims: DimensionL
 def build(ctx: BuildContext) -> RulesExtractor:
     res = ctx.resource(NormalizeResources.from_context)
     return RulesExtractor(default_rules(res, ctx.resource(TitleLayout.from_context),
-                                        ctx.resource(DimensionLayout.from_context)))
+                                        ctx.resource(DimensionLayout.from_context),
+                                        ctx.resource(DimensionLayout.description_from_context)))
