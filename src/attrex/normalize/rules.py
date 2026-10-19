@@ -10,8 +10,13 @@ from typing import Protocol
 
 from attrex.contracts import BuildContext, Candidate, Card, CategorySchema, Source, Step
 from attrex.normalize.dictionary import DictMatch
-from attrex.normalize.dimensions import (DimensionLayout, DimsMention, find_description_dims, find_dims,
-                                         labeled_order)
+from attrex.normalize.dimensions import (
+    DimensionLayout,
+    DimsMention,
+    find_description_dims,
+    find_dims,
+    labeled_order,
+)
 from attrex.normalize.numbers import NumberMention, find_numbers, is_cross_unit, unit_fits
 from attrex.normalize.resources import NormalizeResources
 from attrex.normalize.settings import Scores
