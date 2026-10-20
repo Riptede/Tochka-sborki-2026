@@ -1,5 +1,5 @@
 {
-  "run_id": "20261020-0338-full-catalog",
+  "run_id": "20261021-0158-full-catalog",
   "steps": [
     "rules",
     "parse",
@@ -33,6 +33,6 @@
     "llm_values": 0,
     "llm_ungrounded": 0
   },
-  "started_at": "2026-10-20T03:39:25",
-  "git_commit": "037d5e0"
+  "started_at": "2026-10-21T01:58:56",
+  "git_commit": "3eb720b"
 }
