@@ -57,3 +57,13 @@ def test_calibrator_is_applied_with_step():
     assert agg.decide([cand("color", "черный", 0.8)], ["color"])["color"].confidence == 0.4
     parse = cand("color", "черный", 0.8, Step.PARSE, Source.SELLER_ATTRS)
     assert agg.decide([parse], ["color"])["color"].confidence == 0.8
+
+
+def test_llm_confirmation_uses_llm_curve():
+    agg = Aggregator(calibrator=lambda attr_id, step, raw: 0.99 if step is Step.LLM else 0.5)
+    rules = cand("color", "черный", 0.9)
+    assert agg.decide([rules], ["color"])["color"].confidence == 0.5
+    confirmed = agg.decide([rules, cand("color", "черный", 0.7, Step.LLM)], ["color"])["color"]
+    assert confirmed.confidence == 0.99 and confirmed.best.step is Step.RULES   # кривая LLM, цитата — сильнейшая
+    other = agg.decide([rules, cand("color", "белый", 0.7, Step.LLM)], ["color"])["color"]
+    assert other.value == "черный" and other.confidence == 0.5                  # LLM за другое значение — не подтверждение
