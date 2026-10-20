@@ -39,6 +39,10 @@ class RuleSettings:
     window_before: int = 30          # символов от ключевого слова до числа
     window_after: int = 8            # «16GB RAM»: ключевое слово сразу после числа; дальше — оно про следующее число
     after_penalty: int = 2           # слово после числа дальше слова перед ним во столько раз
+    # число сразу после этих слов — граница («весом до 35 кг», «от 37 до 70 дюймов»), а не значение
+    limit_words: tuple[str, ...] = ("до", "от", "свыше", "более", "менее", "максимум", "максимальн")
+    # слова перед числом, при которых оно — другая величина атрибута: «вес брутто», «нагрузка до 30 кг»
+    exclude_context: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -81,6 +85,14 @@ def _canon_filter(cfg: dict) -> CanonFilter:
                        more_frequent_in=tuple(cfg.get("more_frequent_in") or ()))
 
 
+def _rule_settings(cfg: dict) -> RuleSettings:
+    cfg = dict(cfg)
+    if "limit_words" in cfg:
+        cfg["limit_words"] = _folded(cfg["limit_words"])
+    cfg["exclude_context"] = {a: _folded(w) for a, w in (cfg.get("exclude_context") or {}).items()}
+    return RuleSettings(**cfg)
+
+
 def parse_settings(cfg: dict) -> NormalizeSettings:
     layout, dims = cfg.get("title_layout", {}), cfg.get("dimensions", {})
     return NormalizeSettings(
@@ -98,7 +110,7 @@ def parse_settings(cfg: dict) -> NormalizeSettings:
         compat_words=frozenset(_folded(cfg.get("compat_words"))),
         scores=Scores(**cfg.get("scores", {})),
         parse=ParseSettings(**cfg.get("parse", {})),
-        rules=RuleSettings(**cfg.get("rules", {})),
+        rules=_rule_settings(cfg.get("rules") or {}),
         retrieval=dict(cfg.get("retrieval", {})),
         model_match=dict(cfg.get("model_match", {})),
         min_prefix_count=int(layout.get("min_prefix_count", 3)),

@@ -25,6 +25,10 @@ from attrex.normalize.title import TitleLayout
 from attrex.normalize.units import canon_model, canon_text, to_canonical_number
 
 
+# единица в знаменателе: «180 г/м2», «60 км/ч», «2 кг/шт» — другая величина; «24"/VA/1920x1080» — перечень характеристик
+_PER_UNIT = re.compile(r"\s*/\s*(?:м[23²³]?|кв|ч|час|с|сек|мин|шт|л|км|см[23²³]?)(?![\w])")
+
+
 class Rule(Protocol):
     attr_ids: frozenset[str]
 
@@ -128,6 +132,30 @@ class UnitNumberRule:
         self.keywords = {a: re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, kws)) + r")\w*")
                          for a, kws in settings.keywords.items() if kws}
         self.anchored_units = settings.anchored_units
+        k = self.k
+        self.limit_before = (re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, k.limit_words)) + r")\w*\s*[:—–-]?\s*$")
+                             if k.limit_words else None)
+        self.exclude = {a: re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, words)) + r")")
+                        for a, words in k.exclude_context.items() if words}
+
+    def _not_a_value(self, folded: str, m: NumberMention) -> bool:
+        """Граница («до 35 кг», «от 37 до 70 дюймов») или другая величина с той же единицей: «450 г/м2», «кг/м³»."""
+        if _PER_UNIT.match(folded, m.end):
+            return True
+        return bool(self.limit_before and self.limit_before.search(folded, max(0, m.start - 20), m.start))
+
+    def _excluded(self, attr: str, folded: str, m: NumberMention) -> bool:
+        """Перед числом слово, при котором это другая величина атрибута: «вес брутто 20 кг», «нагрузка на полку 5 кг»."""
+        rx = self.exclude.get(attr)
+        if rx is None:
+            return False
+        start = max(0, m.start - self.k.window_before)
+        line = folded.rfind("\n", start, m.start)
+        start = line + 1 if line >= 0 else start
+        # от последнего ключевого слова атрибута: в «грузоподъёмность 2 т, вес 15 кг» число 15 — вес
+        kw = self.keywords.get(attr)
+        last = [s for s, _ in (x.span() for x in kw.finditer(folded, start, m.start))] if kw else []
+        return bool(rx.search(folded, last[-1] if last else start, m.start))
 
     def apply(self, text: CardText, wanted: frozenset[str]) -> Iterator[Candidate]:
         if not wanted & self.attr_ids:
@@ -135,11 +163,11 @@ class UnitNumberRule:
         for field in text.fields:
             spans = {a: [m.span() for m in rx.finditer(field.folded)] for a, rx in self.keywords.items()}
             for m in find_numbers(field.folded):
-                if m.unit is None or _looks_like_year(m):
+                if m.unit is None or _looks_like_year(m) or self._not_a_value(field.folded, m):
                     continue
                 attr, anchored = self._resolve(m, wanted, spans, field)
                 # число досталось атрибуту вне схемы, атрибуту-справочнику (накопителю) или никому
-                if attr not in self.attr_ids or attr not in wanted:
+                if attr not in self.attr_ids or attr not in wanted or self._excluded(attr, field.folded, m):
                     continue
                 value = m.to(self.units[attr])
                 if value is not None:

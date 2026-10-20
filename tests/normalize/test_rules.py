@@ -140,6 +140,33 @@ def test_tons_need_weight_keyword_before(rules, title, description, expected):
     assert values(rules.extract(card, CategorySchema(None, ("weight",)), [])) == expected
 
 
+@pytest.mark.parametrize("description, expected", [
+    ("Кронштейн для экранов с диагональю до 47 дюймов и весом до 25 кг.", {}),          # предел, а не вес
+    ("Модель рассчитана на вес до 180 кг и измеряет состав тела.", {}),
+    ("Выдерживает весовую нагрузку до 30 кг.", {}),
+    ("Вес брутто – 21,6 кг; Тип установки – подвесной", {}),                           # с упаковкой
+    ("Коврик 50х80 см, плотность 450 г/м2, серый", {}),                               # плотность, а не вес
+    ("Вес станка без упаковки — 6 кг.", {"weight": {"6"}}),                            # «без упаковки» — вес товара
+    ("Грузоподъемность 2 т, вес 15 кг", {"weight": {"15"}}),                           # исключение — до «вес»
+    ("Габариты: 59,5х53,8х59,2 см, вес — 24,7 кг.", {"weight": {"24.7"}}),
+])
+def test_weight_limits_and_other_quantities(rules, description, expected):
+    card = Card(sku_id=10, title="Товар", description=description)
+    assert values(rules.extract(card, CategorySchema(None, ("weight",)), [])) == expected
+
+
+def test_slash_specs_and_pro_max_are_values(rules):
+    laptop = Card(12, "Ноутбук Acer Aspire 5 A515-58P 15.6\"/1920x1080/Core i3")
+    assert values(rules.extract(laptop, CategorySchema(None, ("screen_diag",)), [])) == {"screen_diag": {"15.6"}}
+    power = Card(13, "Внешний аккумулятор GoGadget Boost 20 Pro Max 20000 мАч")
+    assert values(rules.extract(power, CategorySchema(None, ("battery",)), [])) == {"battery": {"20000"}}
+
+
+def test_screen_range_is_not_a_value(rules):
+    card = Card(11, "Кронштейн для телевизора", "Подходит для диагоналей от 37 до 70 дюймов")
+    assert values(rules.extract(card, CategorySchema(None, ("screen_diag",)), [])) == {}
+
+
 def test_color_in_title_tail_scores_higher(rules):
     schema = CategorySchema(None, ("color",))
     tail = rules.extract(Card(8, "Подушка декоративная 365home 40x40 голубой"), schema, [])

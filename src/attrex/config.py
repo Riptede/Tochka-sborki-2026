@@ -206,6 +206,8 @@ class RulesSection(Strict):
     window_before: Positive = 30
     window_after: Positive = 8
     after_penalty: Positive = 2
+    limit_words: list[str] = []
+    exclude_context: dict[str, list[str]] = {}
 
 
 class NormalizeConfig(BaseModel):
@@ -315,6 +317,7 @@ def validate_normalize(cfg: dict, path: Path = CONFIGS / "normalize.yaml") -> No
             _known(getattr(m, name), attrs, name)
         _known(m.inflected, attrs, "inflected")
         _known(m.retrieval.get("attrs", []), attrs, "retrieval.attrs")
+        _known(m.rules.exclude_context, attrs, "rules.exclude_context")
         _known(m.canon_filters, attrs, "canon_filters")
         _known({a for f in m.canon_filters.values() for a in f.more_frequent_in}, attrs, "canon_filters.more_frequent_in")
         _known(m.title_tail_attrs, attrs, "title_tail_attrs")
