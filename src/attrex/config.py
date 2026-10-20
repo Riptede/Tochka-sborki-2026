@@ -149,6 +149,10 @@ class SplitSection(Strict):
         return self
 
 
+class ReviewSection(Strict):
+    traffic_weight_scale: Annotated[float, Field(ge=0)] = 1000   # множитель веса по трафику в приоритете очереди
+
+
 class CategorySection(Strict):
     resolver: str | None = None
 
@@ -162,6 +166,7 @@ class PipelineConfig(Strict):
     llm: LlmSection
     embeddings: EmbeddingsSection
     split: SplitSection
+    review: ReviewSection = ReviewSection()
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -192,6 +197,17 @@ class CanonFilterSection(Strict):
         return [str(x) for x in v or ()]
 
 
+class RulesSection(Strict):
+    """Множители уверенности и окна правил (normalize/rules.py, RuleSettings)."""
+    offset_penalty: Share = 0.85
+    no_prefix_penalty: Share = 0.8
+    model_factor: Share = 0.8
+    unanchored_factor: Share = 0.9
+    window_before: Positive = 30
+    window_after: Positive = 8
+    after_penalty: Positive = 2
+
+
 class NormalizeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -211,6 +227,7 @@ class NormalizeConfig(BaseModel):
     scores: dict[Literal["title", "description", "unknown_value", "partial_match", "assumed", "title_inner"],
                  Share] = {}
     parse: dict[str, Any] = {}
+    rules: RulesSection = RulesSection()
     retrieval: dict[str, Any] = {}
     model_match: dict[str, Any] = {}
     title_layout: dict[str, Any] = {}

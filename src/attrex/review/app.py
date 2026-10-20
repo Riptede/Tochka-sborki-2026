@@ -20,7 +20,7 @@ import yaml
 
 from attrex.paths import CONFIGS
 from attrex.registry import Registry, load_registry
-from attrex.review.queue import QUEUE_COLUMNS
+from attrex.review.queue import QUEUE_COLUMNS, read_queue_csv
 
 TEMPLATE = Path(__file__).with_name("app.html")
 PLACEHOLDER = "/*__DATA__*/"
@@ -28,11 +28,7 @@ MAX_OPTIONS = 2000      # подсказок на атрибут: справоч
 
 
 def read_queue(path: Path) -> pd.DataFrame:
-    q = pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig")
-    missing = [c for c in QUEUE_COLUMNS if c not in q.columns]
-    if missing:
-        raise ValueError(f"{path}: это не очередь проверки, нет колонок {missing}")
-    return q[QUEUE_COLUMNS]
+    return read_queue_csv(path)[QUEUE_COLUMNS]
 
 
 def thresholds(registry: Registry) -> dict[str, float]:
@@ -107,6 +103,8 @@ def main() -> None:
     con = duckdb.connect(str(a.db), read_only=True) if a.db.exists() else None
     try:
         path = write_page(queue, a.run_id, queue.with_name("review.html"), con)
+    except ValueError as e:         # очередь испорчена при сохранении: подсказка вместо трассировки
+        raise SystemExit(f"ошибка: {e}") from None
     finally:
         if con is not None:
             con.close()

@@ -48,9 +48,7 @@ _LEADING_PUNCT = re.compile(r"[\s.,;:\-–—/|]*")
 class TitleBrandModelRule:
     """Бренд — первое слово-бренд после префикса заголовка, модель — остаток заголовка после бренда."""
     attr_ids = frozenset({"brand", "model"})
-    OFFSET_PENALTY = 0.85        # бренд не сразу после префикса — раскладка заголовка менее надёжна
-    NO_PREFIX_PENALTY = 0.8      # префикс заголовка не выучен — раскладка угадана
-    MODEL_FACTOR = 0.8           # граница модели и характеристик в заголовке размыта сильнее, чем бренд
+    # множители уверенности — раздел rules в configs/normalize.yaml (RuleSettings)
 
     def __init__(self, layout: TitleLayout, res: NormalizeResources):
         self.layout, self.res = layout, res
@@ -60,7 +58,8 @@ class TitleBrandModelRule:
         parts = self.layout.parse(title, self.res.dictionary)
         if not parts.found:
             return
-        trust = scores.title * self.OFFSET_PENALTY ** parts.offset * (1.0 if parts.prefix_known else self.NO_PREFIX_PENALTY)
+        k = self.res.settings.rules
+        trust = scores.title * k.offset_penalty ** parts.offset * (1.0 if parts.prefix_known else k.no_prefix_penalty)
         if "brand" in wanted:
             if parts.brand:
                 yield _candidate("brand", parts.brand.value, title, trust * parts.brand.score,
@@ -74,7 +73,7 @@ class TitleBrandModelRule:
             start = parts.brand_end + len(_LEADING_PUNCT.match(title.text, parts.brand_end).group())
             model = canon_model(title.text[start:])
             if model:
-                yield _candidate("model", model, title, trust * self.MODEL_FACTOR, start, len(title.text))
+                yield _candidate("model", model, title, trust * k.model_factor, start, len(title.text))
 
 
 _MEMORY_PAIR = re.compile(r"(?<![\w.])(\d{1,2})\s*(?:gb|гб)?\s*[/+]\s*(\d{1,4})\s*(gb|гб|tb|тб)(?!\w)")
@@ -116,13 +115,11 @@ class UnitNumberRule:
     Единицы из anchored_units («т») берутся только с ключевым словом перед числом: «домкрат 3т», «плита 341Т»,
     «1.6Т» у мотора — грузоподъёмность, модель и турбо, а не вес.
     """
-    WINDOW_BEFORE = 30     # символов от ключевого слова до числа
-    WINDOW_AFTER = 8       # «16GB RAM» — ключевое слово сразу после числа; дальше оно относится к следующему числу
-    AFTER_PENALTY = 2      # «Высота 270 см, ширина …»: при равном расстоянии слово перед числом важнее слова после
+    # окна поиска ключевого слова и множители — раздел rules в configs/normalize.yaml (RuleSettings)
 
     def __init__(self, res: NormalizeResources):
         reg, settings = res.registry, res.settings
-        self.scores = settings.scores
+        self.scores, self.k = settings.scores, settings.rules
         self.attr_ids = frozenset(a for a, s in reg.attrs.items() if s.kind == "number")
         # порядок — как в реестре: от него зависит выбор при равных расстояниях, он должен быть одинаков в любом процессе
         self.units = {a: s.unit for a, s in reg.attrs.items() if a in self.attr_ids}
@@ -146,7 +143,7 @@ class UnitNumberRule:
                     continue
                 value = m.to(self.units[attr])
                 if value is not None:
-                    score = field_score(self.scores, field) * (1.0 if anchored else 0.9)
+                    score = field_score(self.scores, field) * (1.0 if anchored else self.k.unanchored_factor)
                     yield _candidate(attr, value, field, score, m.start, m.end)
 
     def _resolve(self, m: NumberMention, wanted: frozenset[str], spans: dict[str, list[tuple[int, int]]],
@@ -169,12 +166,12 @@ class UnitNumberRule:
         return None, False
 
     def _distance(self, text: str, s: int, e: int, m: NumberMention, before_only: bool = False) -> int | None:
-        if e <= m.start and m.start - e <= self.WINDOW_BEFORE and "\n" not in text[e:m.start]:
+        if e <= m.start and m.start - e <= self.k.window_before and "\n" not in text[e:m.start]:
             return m.start - e
         if before_only:
             return None
-        if s >= m.end and s - m.end <= self.WINDOW_AFTER and "\n" not in text[m.end:s]:
-            return (s - m.end) * self.AFTER_PENALTY + 1
+        if s >= m.end and s - m.end <= self.k.window_after and "\n" not in text[m.end:s]:
+            return (s - m.end) * self.k.after_penalty + 1
         return None
 
 

@@ -13,13 +13,16 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
+from attrex.review.queue import read_queue_csv
+
 DECISIONS = {"accept", "fix", "absent"}
+FILLED_COLUMNS = ["rank", "sku_id", "attr_id", "value", "value_raw", "decision", "fixed_value"]   # нужны для загрузки
 COLUMNS = ["sku_id", "attr_id", "run_id", "decision", "value", "value_raw", "reviewer", "decided_at"]
 
 
 def read_filled_queue(path: Path, run_id: str, reviewer: str, now: datetime | None = None) -> pd.DataFrame:
     """Строки очереди с решением → решения. Неизвестное решение или fix без значения — ошибка, а не тихий пропуск."""
-    q = pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    q = read_queue_csv(path, FILLED_COLUMNS)
     q = q[q.decision.str.strip() != ""].copy()
     q["decision"] = q.decision.str.strip().str.lower()
     bad = q[~q.decision.isin(DECISIONS) | ((q.decision == "fix") & (q.fixed_value.str.strip() == ""))]
@@ -83,7 +86,10 @@ def main() -> None:
     ap.add_argument("--to-db", action="store_true", help="переписать rev_decisions в БД (БД не должна быть занята)")
     ap.add_argument("--db", type=Path, default=paths.DB)
     a = ap.parse_args()
-    new = read_filled_queue(a.file, a.run_id, a.reviewer)
+    try:
+        new = read_filled_queue(a.file, a.run_id, a.reviewer)
+    except ValueError as e:
+        raise SystemExit(f"ошибка: {e}") from None
     merged = DecisionStore(a.store).append(new)
     print(f"решений добавлено: {len(new):,} ({new.decision.value_counts().to_dict()}); всего в {a.store}: {len(merged):,}")
     if a.to_db:

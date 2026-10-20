@@ -30,6 +30,18 @@ class ParseSettings:
 
 
 @dataclass(frozen=True)
+class RuleSettings:
+    """Множители уверенности правил (normalize/rules.py): раздел rules в configs/normalize.yaml."""
+    offset_penalty: float = 0.85     # бренд не сразу после префикса заголовка — за каждое слово сдвига
+    no_prefix_penalty: float = 0.8   # префикс заголовка не выучен — раскладка угадана
+    model_factor: float = 0.8        # граница модели и характеристик в заголовке размыта сильнее, чем бренд
+    unanchored_factor: float = 0.9   # число с единицей без ключевого слова рядом
+    window_before: int = 30          # символов от ключевого слова до числа
+    window_after: int = 8            # «16GB RAM»: ключевое слово сразу после числа; дальше — оно про следующее число
+    after_penalty: int = 2           # слово после числа дальше слова перед ним во столько раз
+
+
+@dataclass(frozen=True)
 class NormalizeSettings:
     keywords: dict[str, tuple[str, ...]] = field(default_factory=dict)
     unit_consumers: dict[str, str] = field(default_factory=dict)
@@ -45,6 +57,7 @@ class NormalizeSettings:
     compat_words: frozenset[str] = frozenset()
     scores: Scores = Scores()
     parse: ParseSettings = ParseSettings()
+    rules: RuleSettings = RuleSettings()
     retrieval: dict = field(default_factory=dict)     # разбирает normalize/retrieval.py: RetrievalSettings
     model_match: dict = field(default_factory=dict)   # разбирает normalize/model_match.py: ModelMatchSettings
     min_prefix_count: int = 3
@@ -85,6 +98,7 @@ def parse_settings(cfg: dict) -> NormalizeSettings:
         compat_words=frozenset(_folded(cfg.get("compat_words"))),
         scores=Scores(**cfg.get("scores", {})),
         parse=ParseSettings(**cfg.get("parse", {})),
+        rules=RuleSettings(**cfg.get("rules", {})),
         retrieval=dict(cfg.get("retrieval", {})),
         model_match=dict(cfg.get("model_match", {})),
         min_prefix_count=int(layout.get("min_prefix_count", 3)),
