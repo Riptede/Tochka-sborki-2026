@@ -76,7 +76,10 @@ class Aggregator:
         i = max(range(len(groups)), key=lambda k: supports[k])
         raw = supports[i] * supports[i] / total if total else 0.0
         best = max(groups[i], key=lambda c: self._weight(c) * c.score)
-        return AttrDecision(attr_id, best.value, round(self.calibrator(attr_id, best.step, raw), 4), best,
+        # значение, которое подтвердил LLM, калибруется своей кривой «attr/llm»: подтверждение меняет точность,
+        # а кривая правил его не видела и упирается в свой потолок
+        step = Step.LLM if any(c.step is Step.LLM for c in groups[i]) else best.step
+        return AttrDecision(attr_id, best.value, round(self.calibrator(attr_id, step, raw), 4), best,
                             tuple(groups[i]), len(groups))
 
     def _group(self, attr_id: str, cands: list[Candidate]) -> list[list[Candidate]]:

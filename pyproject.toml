@@ -22,7 +22,7 @@ ml = ["sentence-transformers>=3.0", "faiss-cpu>=1.8"]
 llm = ["openai>=1.40"]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "quickjs>=1.19"]   # quickjs: тест JS интерфейса модератора
 
 [build-system]
 requires = ["hatchling"]

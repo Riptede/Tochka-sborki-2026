@@ -1,6 +1,6 @@
 """Итоговые результаты для сдачи: прогоны, метрики и файл предсказаний → results/ (в git).
 
-    uv run python scripts/make_results.py                                   # всё заново: ≈1 ч на 3 процессах
+    uv run python scripts/make_results.py                                   # всё заново: ≈35 мин на 3 процессах
     uv run python scripts/make_results.py --full-run 20261018-1442-full-catalog   # полный прогон уже есть в БД
 
 Что запускается (все прогоны — обычными scripts/run_pipeline.py и scripts/evaluate.py):

@@ -6,7 +6,9 @@ from pathlib import Path
 import yaml
 
 from attrex.config import validate_normalize
+from attrex.normalize.dictionary import CanonFilter
 from attrex.normalize.text import fold
+from attrex.normalize.units import canon_text
 from attrex.paths import CONFIGS
 
 
@@ -17,6 +19,7 @@ class Scores:
     unknown_value: float = 0.3
     partial_match: float = 0.8
     assumed: float = 0.7
+    title_inner: float = 0.6     # множитель: значение атрибута из title_tail_attrs не в конце заголовка
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,9 @@ class NormalizeSettings:
     key_functions: dict[str, str] = field(default_factory=dict)
     inflected: tuple[str, ...] = ()
     dictionary_min_support: int = 3
+    canon_filters: dict[str, CanonFilter] = field(default_factory=dict)
+    anchored_units: frozenset[str] = frozenset()
+    title_tail_attrs: frozenset[str] = frozenset()
     manual_weight: int = 20
     synonyms: dict[str, dict[str, str]] = field(default_factory=dict)
     compat_words: frozenset[str] = frozenset()
@@ -43,6 +49,7 @@ class NormalizeSettings:
     model_match: dict = field(default_factory=dict)   # разбирает normalize/model_match.py: ModelMatchSettings
     min_prefix_count: int = 3
     max_brand_offset: int = 2
+    brand_prefix_ratio: float = 0.0      # 0 — всегда самое длинное написание бренда (title.py)
     dims_min_support: int = 5
     dims_min_rate: float = 0.5
 
@@ -55,6 +62,12 @@ def _folded(words) -> tuple[str, ...]:
     return tuple(fold(str(w)).strip() for w in words or ())
 
 
+def _canon_filter(cfg: dict) -> CanonFilter:
+    return CanonFilter(min_offers=int(cfg.get("min_offers", 1)),
+                       exclude=frozenset(canon_text(str(v)) for v in cfg.get("exclude") or ()),
+                       more_frequent_in=tuple(cfg.get("more_frequent_in") or ()))
+
+
 def parse_settings(cfg: dict) -> NormalizeSettings:
     layout, dims = cfg.get("title_layout", {}), cfg.get("dimensions", {})
     return NormalizeSettings(
@@ -64,6 +77,9 @@ def parse_settings(cfg: dict) -> NormalizeSettings:
         key_functions=dict(cfg.get("key_functions", {})),
         inflected=tuple(cfg.get("inflected", ())),
         dictionary_min_support=int(cfg.get("dictionary_min_support", 3)),
+        canon_filters={a: _canon_filter(f or {}) for a, f in (cfg.get("canon_filters") or {}).items()},
+        anchored_units=frozenset(_folded(cfg.get("anchored_units"))),
+        title_tail_attrs=frozenset(cfg.get("title_tail_attrs") or ()),
         manual_weight=int(cfg.get("manual_weight", 20)),
         synonyms={a: {str(k): str(v) for k, v in s.items()} for a, s in cfg.get("synonyms", {}).items()},
         compat_words=frozenset(_folded(cfg.get("compat_words"))),
@@ -73,6 +89,7 @@ def parse_settings(cfg: dict) -> NormalizeSettings:
         model_match=dict(cfg.get("model_match", {})),
         min_prefix_count=int(layout.get("min_prefix_count", 3)),
         max_brand_offset=int(layout.get("max_brand_offset", 2)),
+        brand_prefix_ratio=float(layout.get("brand_prefix_ratio", 0.0)),
         dims_min_support=int(dims.get("min_support", 5)),
         dims_min_rate=float(dims.get("min_rate", 0.5)),
     )

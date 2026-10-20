@@ -113,7 +113,9 @@ class Pipeline:
             return Prediction(**base, value=None, unit=None, confidence=None, status=Status.EMPTY,
                               step=Step.NONE, source=Source.NONE)
         grounded = [c for c in d.support if self.grounding.check(card, c)]
-        best = max(grounded, key=lambda c: c.score) if grounded else d.best
+        # подтверждение LLM — шаг значения (калибровка «attr/llm», вклад LLM в ablation), цитата — его же
+        llm = [c for c in grounded if c.step is Step.LLM]
+        best = max(llm or grounded, key=lambda c: c.score) if grounded else d.best
         accepted = (bool(grounded) and best.step is not Step.MODEL_MATCH
                     and d.confidence >= self.aggregator.threshold(d.attr_id))
         spec = self.registry[d.attr_id]

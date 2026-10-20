@@ -9,7 +9,14 @@ from collections.abc import Iterable, Iterator
 from typing import Protocol
 
 from attrex.contracts import BuildContext, Candidate, Card, CategorySchema, Source, Step
-from attrex.normalize.dimensions import DimensionLayout, find_dims
+from attrex.normalize.dictionary import DictMatch
+from attrex.normalize.dimensions import (
+    DimensionLayout,
+    DimsMention,
+    find_description_dims,
+    find_dims,
+    labeled_order,
+)
 from attrex.normalize.numbers import NumberMention, find_numbers, is_cross_unit, unit_fits
 from attrex.normalize.resources import NormalizeResources
 from attrex.normalize.settings import Scores
@@ -33,6 +40,9 @@ def _candidate(attr_id: str, value: str, field: TextField, score: float, start: 
     evidence = field.fragment(start, end)
     return Candidate(attr_id=attr_id, value=value, step=Step.RULES, source=field.source, score=round(score, 4),
                      value_raw=evidence if raw is None else raw, evidence=evidence)
+
+
+_LEADING_PUNCT = re.compile(r"[\s.,;:\-–—/|]*")
 
 
 class TitleBrandModelRule:
@@ -60,9 +70,11 @@ class TitleBrandModelRule:
                 if brand:
                     yield _candidate("brand", brand, title, scores.unknown_value, parts.brand_start, parts.brand_end)
         if "model" in wanted:
-            model = canon_model(title.text[parts.brand_end:])
+            # «Leather Co. для iPhone 15»: точка бренда — не начало модели
+            start = parts.brand_end + len(_LEADING_PUNCT.match(title.text, parts.brand_end).group())
+            model = canon_model(title.text[start:])
             if model:
-                yield _candidate("model", model, title, trust * self.MODEL_FACTOR, parts.brand_end, len(title.text))
+                yield _candidate("model", model, title, trust * self.MODEL_FACTOR, start, len(title.text))
 
 
 _MEMORY_PAIR = re.compile(r"(?<![\w.])(\d{1,2})\s*(?:gb|гб)?\s*[/+]\s*(\d{1,4})\s*(gb|гб|tb|тб)(?!\w)")
@@ -101,6 +113,8 @@ class UnitNumberRule:
     выбирает ближайшее ключевое слово из configs/normalize.yaml — среди всех атрибутов реестра, а не только схемы:
     «оперативной памяти 8 ГБ» у смартфона — не встроенная память, даже если RAM в схеме нет. Без ключевого слова
     число берётся только из заголовка и только если единица однозначна для схемы карточки.
+    Единицы из anchored_units («т») берутся только с ключевым словом перед числом: «домкрат 3т», «плита 341Т»,
+    «1.6Т» у мотора — грузоподъёмность, модель и турбо, а не вес.
     """
     WINDOW_BEFORE = 30     # символов от ключевого слова до числа
     WINDOW_AFTER = 8       # «16GB RAM» — ключевое слово сразу после числа; дальше оно относится к следующему числу
@@ -116,6 +130,7 @@ class UnitNumberRule:
         # ключевое слово — целиком («высота», а не «высот»): расстояние до числа считаем от конца слова
         self.keywords = {a: re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, kws)) + r")\w*")
                          for a, kws in settings.keywords.items() if kws}
+        self.anchored_units = settings.anchored_units
 
     def apply(self, text: CardText, wanted: frozenset[str]) -> Iterator[Candidate]:
         if not wanted & self.attr_ids:
@@ -137,22 +152,27 @@ class UnitNumberRule:
     def _resolve(self, m: NumberMention, wanted: frozenset[str], spans: dict[str, list[tuple[int, int]]],
                  field: TextField) -> tuple[str | None, bool]:
         fits = [a for a, u in self.units.items() if unit_fits(m.unit, u)]
+        before_only = m.unit in self.anchored_units
         best, best_d = None, None
         for a in fits:
             for s, e in spans.get(a, ()):
-                d = self._distance(field.folded, s, e, m)
+                d = self._distance(field.folded, s, e, m, before_only)
                 if d is not None and (best_d is None or d < best_d):
                     best, best_d = a, d
         if best:
             return best, True
+        if before_only:
+            return None, False
         in_schema = [a for a in fits if a in wanted]
         if field.source is Source.TITLE and len(in_schema) == 1 and not is_cross_unit(m.unit, self.units[in_schema[0]]):
             return in_schema[0], False
         return None, False
 
-    def _distance(self, text: str, s: int, e: int, m: NumberMention) -> int | None:
+    def _distance(self, text: str, s: int, e: int, m: NumberMention, before_only: bool = False) -> int | None:
         if e <= m.start and m.start - e <= self.WINDOW_BEFORE and "\n" not in text[e:m.start]:
             return m.start - e
+        if before_only:
+            return None
         if s >= m.end and s - m.end <= self.WINDOW_AFTER and "\n" not in text[m.end:s]:
             return (s - m.end) * self.AFTER_PENALTY + 1
         return None
@@ -164,44 +184,89 @@ def _looks_like_year(m: NumberMention) -> bool:
 
 
 class DimensionsRule:
-    """«100х155», «60x85x60 см» в заголовке → ширина, высота, глубина по выученной раскладке категории."""
+    """«100х155», «60x85x60 см» → ширина, высота, глубина по выученной раскладке категории.
 
-    def __init__(self, layout: DimensionLayout, res: NormalizeResources):
-        self.layout, self.scores = layout, res.settings.scores
+    Заголовок — своя раскладка; описание («габариты 8,6х31х28,6 см») — своя, а подпись порядка «(ШхВхГ)» рядом
+    с числами важнее раскладки.
+    """
+
+    def __init__(self, layout: DimensionLayout, res: NormalizeResources, description_layout: DimensionLayout | None = None):
+        self.layout, self.description_layout, self.scores = layout, description_layout, res.settings.scores
         self.attr_ids = frozenset(a for a, s in res.registry.attrs.items() if s.unit == "cm")
 
     def apply(self, text: CardText, wanted: frozenset[str]) -> Iterator[Candidate]:
-        title = text.title
-        dims = find_dims(title.folded)
+        dims = find_dims(text.title.folded)
+        if dims:
+            yield from self._by_layout(text.title, dims[0], self.layout, text.card.category_id, wanted)
+        if self.description_layout is None:
+            return
+        dims = find_description_dims(text.description.folded)
         if not dims:
             return
-        d = dims[0]
-        for pos, (attr, rate) in self.layout.layout(text.card.category_id, len(d.values)).items():
+        d, field = dims[0], text.description
+        order = labeled_order(field.folded, d)
+        if order is None:
+            yield from self._by_layout(field, d, self.description_layout, text.card.category_id, wanted)
+            return
+        for pos, attr in enumerate(order):
             value = d.value_cm(pos)
             if attr in wanted and value:
-                yield _candidate(attr, value, title, self.scores.title * rate, d.start, d.end, raw=d.values[pos])
+                yield _candidate(attr, value, field, self.scores.description, d.start, d.end, raw=d.values[pos])
+
+    def _by_layout(self, field: TextField, d: DimsMention, layout: DimensionLayout, category_id: int | None,
+                   wanted: frozenset[str]) -> Iterator[Candidate]:
+        for pos, (attr, rate) in layout.layout(category_id, len(d.values)).items():
+            value = d.value_cm(pos)
+            if attr in wanted and value:
+                yield _candidate(attr, value, field, field_score(self.scores, field) * rate, d.start, d.end,
+                                 raw=d.values[pos])
 
 
 class DictionaryRule:
-    """Справочные атрибуты (цвет, материал, процессор, накопитель, состояние) — по написаниям из справочника."""
+    """Справочные атрибуты (цвет, материал, процессор, накопитель, состояние) — по написаниям из справочника.
+
+    У атрибутов из title_tail_attrs (цвет) значение из заголовка надёжно, когда стоит в конце: «Смартфон … черный».
+    В середине заголовка это чаще часть названия, узора или совместимости («Чехол Red Line … голубой», «орнамент:
+    красные»): скор умножается на scores.title_inner. Внутри бренда из справочника («RED SOLUTION») не ищем вовсе.
+    """
     MIN_CHARS = 3     # «да», «-» в справочнике есть (шум эталона), но в тексте это не значение атрибута
 
-    def __init__(self, res: NormalizeResources, attr_ids: Iterable[str]):
-        self.res = res
+    def __init__(self, res: NormalizeResources, attr_ids: Iterable[str], layout: TitleLayout | None = None):
+        self.res, self.layout = res, layout
         self.attr_ids = frozenset(attr_ids)
 
     def apply(self, text: CardText, wanted: frozenset[str]) -> Iterator[Candidate]:
+        scores = self.res.settings.scores
+        tail_attrs = self.res.settings.title_tail_attrs & self.attr_ids & wanted
+        brand = self._brand_span(text.title) if tail_attrs else None
         for attr in sorted(self.attr_ids & wanted):
             for field in text.fields:
-                base = field_score(self.res.settings.scores, field)
-                best = {}
+                positional = attr in tail_attrs and field.source is Source.TITLE
+                best: dict[str, tuple[float, DictMatch]] = {}
                 for h in self.res.dictionary.find(attr, field.tokens):
                     if h.end - h.start < self.MIN_CHARS:
                         continue
-                    if h.value not in best or h.score > best[h.value].score:
-                        best[h.value] = h
-                for h in best.values():
-                    yield _candidate(attr, h.value, field, base * h.score, h.start, h.end)
+                    score = h.score
+                    if positional:
+                        if brand and h.start < brand[1] and h.end > brand[0]:
+                            continue
+                        if not _at_tail(field, h.end):
+                            score *= scores.title_inner
+                    if h.value not in best or score > best[h.value][0]:
+                        best[h.value] = (score, h)
+                for score, h in best.values():
+                    yield _candidate(attr, h.value, field, field_score(scores, field) * score, h.start, h.end)
+
+    def _brand_span(self, title: TextField) -> tuple[int, int] | None:
+        if self.layout is None:
+            return None
+        parts = self.layout.parse(title, self.res.dictionary)
+        return (parts.brand_start, parts.brand_end) if parts.brand else None
+
+
+def _at_tail(field: TextField, end: int) -> bool:
+    """После значения в поле нет слов — только числа, размеры и артикулы («… серый 200х90», «… черный (DP-30HL)»)."""
+    return all(any(ch.isdigit() for ch in t.text) for t in field.tokens if t.start >= end)
 
 
 class RulesExtractor:
@@ -216,19 +281,21 @@ class RulesExtractor:
         return [c for rule in self.rules if rule.attr_ids & wanted for c in rule.apply(text, wanted)]
 
 
-def default_rules(res: NormalizeResources, layout: TitleLayout, dims: DimensionLayout) -> list[Rule]:
+def default_rules(res: NormalizeResources, layout: TitleLayout, dims: DimensionLayout,
+                  description_dims: DimensionLayout | None = None) -> list[Rule]:
     """Набор правил базлайна. Справочные атрибуты, кроме бренда (его даёт раскладка заголовка), — по справочнику."""
     dictionary_attrs = [a for a, s in res.registry.attrs.items() if s.kind == "category" and a != "brand"]
     return [
         TitleBrandModelRule(layout, res),
         MemoryPairRule(res),
         UnitNumberRule(res),
-        DimensionsRule(dims, res),
-        DictionaryRule(res, dictionary_attrs),
+        DimensionsRule(dims, res, description_dims),
+        DictionaryRule(res, dictionary_attrs, layout),
     ]
 
 
 def build(ctx: BuildContext) -> RulesExtractor:
     res = ctx.resource(NormalizeResources.from_context)
     return RulesExtractor(default_rules(res, ctx.resource(TitleLayout.from_context),
-                                        ctx.resource(DimensionLayout.from_context)))
+                                        ctx.resource(DimensionLayout.from_context),
+                                        ctx.resource(DimensionLayout.description_from_context)))

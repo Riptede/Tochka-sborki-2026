@@ -1,5 +1,5 @@
 {
-  "run_id": "20261018-1104-full-catalog",
+  "run_id": "20261020-0338-full-catalog",
   "steps": [
     "rules",
     "parse",
@@ -11,7 +11,7 @@
     "train"
   ],
   "folds": [],
-  "category_id": null,
+  "categories": [],
   "limit": null,
   "workers": 3,
   "hide_category": false,
@@ -19,14 +19,20 @@
     "calibration": "calibration.yaml"
   },
   "n_cards": 1481914,
-  "n_rows": 7297890,
+  "n_rows": 7292244,
   "usage": {
     "llm_calls": 0,
     "llm_tokens": 0,
     "llm_cost_rub": 0.0,
     "embed_tokens": 0,
-    "embed_cost_rub": 0.0
+    "embed_cost_rub": 0.0,
+    "api_failures": 0,
+    "llm_skipped": 0,
+    "llm_invalid": 0,
+    "llm_cards": 0,
+    "llm_values": 0,
+    "llm_ungrounded": 0
   },
-  "started_at": "2026-10-18T11:05:54",
-  "git_commit": "3d29636"
+  "started_at": "2026-10-20T03:39:25",
+  "git_commit": "037d5e0"
 }

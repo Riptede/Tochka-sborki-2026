@@ -3,29 +3,34 @@
     uv run python scripts/demo.py                                    # сборка БД → каскад → метрики → файл → очередь
     uv run python scripts/demo.py --title "Смартфон Samsung Galaxy A55 8/256GB синий" --description "Экран 6,6 дюйма"
     uv run python scripts/demo.py --db data/attrex.duckdb --title "…"  # своя карточка со словарями полной БД
+    uv run python scripts/demo.py --title "…" --json                  # ответ в JSON для встраивания в сервис
 
 Что получается в outputs/demo/:
     attrex.duckdb                 БД из выборки (таблицы raw_*, core_*, pred_*), как data/attrex.duckdb на полных данных
     demo/predictions.parquet|csv  файл предсказаний: строка на (карточка, обязательный атрибут), включая пустые
     demo/report.md                метрики на размеченной части выборки: P/R/F1 по атрибутам, срезы, вклад шагов
     demo/review_queue.csv         очередь ручной проверки: значения ниже порога, важные по трафику — первыми
+    demo/review.html              интерфейс модератора по этой очереди: открыть в браузере
 
 Режим одной карточки печатает по каждому обязательному атрибуту значение в каноне, уверенность, статус
 (accepted — в каталог, review — на проверку, empty — в тексте не найдено) и цитату из текста, которая его подтверждает.
 """
 import argparse
+import json
+import sys
 import time
 from pathlib import Path
 
 import duckdb
 
 from attrex import paths
-from attrex.contracts import BuildContext, Card
+from attrex.contracts import BuildContext, Card, Prediction, Status, Step
 from attrex.db.build import BuildConfig, build
 from attrex.metrics.report import RunInfo, render
-from attrex.metrics.scoring import comparison_same, evaluate, load_outcomes
+from attrex.metrics.scoring import comparison_same, coverage, evaluate, load_outcomes
 from attrex.pipeline import build_pipeline, load_config
 from attrex.registry import load_registry
+from attrex.review.app import write_page
 from attrex.review.queue import build_queue, write_queue
 from attrex.runs import RunSpec, export, run, store
 
@@ -38,7 +43,8 @@ _t0 = time.time()
 
 
 def log(msg: str) -> None:
-    print(f"[{time.time() - _t0:4.0f} с] {msg}", flush=True)
+    # прогресс — в stderr: stdout режима --json остаётся чистым JSON
+    print(f"[{time.time() - _t0:4.0f} с] {msg}", file=sys.stderr, flush=True)
 
 
 def build_demo_db(db: Path) -> None:
@@ -111,11 +117,13 @@ def demo_run() -> None:
     con = duckdb.connect(str(db), read_only=True)
     try:
         metrics = evaluate(load_outcomes(con, EVAL_FOLDS, comparison_same(), run_id=RUN_ID))
+        metrics.coverage = coverage(con, RUN_ID)
         info = RunInfo(RUN_ID, spec.steps, EVAL_FOLDS, result.n_cards,
                        note="Демо на выборке sample/raw: цифры иллюстративные, итоговые — в results/.")
         (OUT / RUN_ID / "report.md").write_text(render(info, metrics), encoding="utf-8")
         files = export(con, RUN_ID, OUT / RUN_ID)
         queue = write_queue(build_queue(con, RUN_ID), OUT / RUN_ID / "review_queue.csv")
+        app = write_page(queue, RUN_ID, OUT / RUN_ID / "review.html", con)
         show_cards(con)
     finally:
         con.close()
@@ -123,11 +131,11 @@ def demo_run() -> None:
     print()
     log("метрики на размеченной части выборки (valid, test, holdout_category): "
         + ", ".join(f"{k} {v:.1%}" for k, v in h.items()))
-    for p in [*files, OUT / RUN_ID / "report.md", queue]:
+    for p in [*files, OUT / RUN_ID / "report.md", queue, app]:
         print(f"       {p.relative_to(paths.ROOT)}")
 
 
-def one_card(db: Path, title: str, description: str) -> None:
+def one_card(db: Path, title: str, description: str, as_json: bool = False) -> None:
     if not db.exists():
         if db != OUT / "attrex.duckdb":
             raise SystemExit(f"нет БД {db}: соберите её scripts/build_db.py или запустите demo.py без --db")
@@ -141,13 +149,42 @@ def one_card(db: Path, title: str, description: str) -> None:
         con.close()
     card = Card(sku_id=0, title=title, description=description)
     resolved = pipeline.resolver.resolve(card) if pipeline.resolver else card
-    preds = pipeline.run(card)
+    preds = sorted(pipeline.run(card), key=lambda p: (str(p.status), p.attr_id))
     reg = load_registry()
+    threshold = pipeline.aggregator.threshold
+    category = cats.get(resolved.category_id)
+    if as_json:
+        print(json.dumps({"title": title, "category_id": resolved.category_id, "category": category,
+                          "category_conf": resolved.category_conf,
+                          "attributes": [{"attr_id": p.attr_id, "name": reg[p.attr_id].name_ru, "value": p.value,
+                                          "unit": p.unit, "confidence": p.confidence,
+                                          "threshold": threshold(p.attr_id), "status": str(p.status),
+                                          "reason": reason(p, threshold(p.attr_id)), "step": str(p.step),
+                                          "source": str(p.source), "evidence": p.evidence} for p in preds]},
+                         ensure_ascii=False, indent=2))
+        return
     conf = f"{resolved.category_conf:.2f}" if resolved.category_conf is not None else "—"
-    print(f"\n{title}\n  категория: {cats.get(resolved.category_id, 'не определена')} (уверенность {conf})")
+    print(f"\n{title}\n  категория: {category or 'не определена — только сквозные атрибуты'} (уверенность {conf})")
     print(header(gold=False))
-    for p in sorted(preds, key=lambda p: (str(p.status), p.attr_id)):
+    for p in preds:
         print(fmt_row(reg[p.attr_id].name_ru, p.value, p.unit, p.confidence, str(p.status), str(p.step), p.evidence))
+    print("\n  accepted — в каталог; review — на ручную проверку; empty — в тексте не найдено, значение не выдумываем")
+    for p in preds:
+        if p.status is not Status.ACCEPTED:
+            print(f"  {reg[p.attr_id].name_ru}: {reason(p, threshold(p.attr_id))}")
+
+
+def reason(p: Prediction, threshold: float) -> str:
+    """Почему значение принято или не принято — в словах модератора."""
+    if p.status is Status.EMPTY:
+        return "в тексте карточки значения нет"
+    if p.status is Status.ACCEPTED:
+        return f"уверенность {p.confidence:.2f} не ниже порога атрибута {threshold:.2f}, цитата подтверждена"
+    if p.step is Step.MODEL_MATCH:
+        return "значение взято у другой карточки той же модели — только на проверку"
+    if p.confidence is not None and p.confidence < threshold:
+        return f"уверенность {p.confidence:.3f} ниже порога атрибута {threshold:.3f} (точность ≥ 90% на valid)"
+    return "цитата не подтвердила значение после нормализации — на проверку"
 
 
 def main() -> None:
@@ -155,10 +192,15 @@ def main() -> None:
     ap.add_argument("--title", help="заголовок своей карточки: извлечь атрибуты только из неё")
     ap.add_argument("--description", default="", help="описание своей карточки")
     ap.add_argument("--db", type=Path, default=OUT / "attrex.duckdb", help="БД со словарями (по умолчанию из выборки)")
+    ap.add_argument("--json", action="store_true", help="своя карточка: ответ в JSON — для встраивания в сервис")
     a = ap.parse_args()
     paths.load_env()        # ключ API, если шаг LLM включён в configs/pipeline.yaml
-    if a.title:
-        one_card(a.db, a.title, a.description)
+    if a.title is not None:
+        if not a.title.strip():
+            ap.error("--title пустой: атрибуты извлекаются из заголовка и описания карточки")
+        one_card(a.db, a.title, a.description, a.json)
+    elif a.json:
+        ap.error("--json — только для своей карточки: добавьте --title")
     else:
         demo_run()
 

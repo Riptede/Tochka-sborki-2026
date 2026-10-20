@@ -18,11 +18,12 @@ _SPACES = re.compile(r"\s+")
 
 
 def fold(s: str) -> str:
-    """Нижний регистр, ё→е, неразрывный пробел → пробел, «6,7» → «6.7». Длина строки не меняется."""
+    """Нижний регистр, ё→е, неразрывные пробел и дефис → обычные, «6,7» → «6.7». Длина строки не меняется."""
     low = s.lower()
     if len(low) != len(s):  # у редких символов (İ) нижний регистр длиннее — их оставляем как есть
         low = "".join(c.lower() if len(c.lower()) == 1 else c for c in s)
-    return _DECIMAL_COMMA.sub(".", low.replace("ё", "е").replace("\xa0", " "))
+    low = low.replace("ё", "е").replace("\xa0", " ").replace("‑", "-").replace("‐", "-")
+    return _DECIMAL_COMMA.sub(".", low)
 
 
 def squash(s: str) -> str:
