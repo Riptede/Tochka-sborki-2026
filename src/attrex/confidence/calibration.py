@@ -152,20 +152,30 @@ def main() -> None:
     ap.add_argument("--floor", type=float, default=0.5, help="порог не ниже: вероятность < 0.5 — скорее неверно")
     ap.add_argument("--min-n", type=int, default=50, help="меньше значений — кривая уровнем выше")
     ap.add_argument("--db", type=Path, default=paths.DB)
+    ap.add_argument("--limit", type=int, help="первые N карточек фолда: LLM-кривые учим на выборке, а не на всём valid")
+    ap.add_argument("--llm-budget", type=float, help="включить LLM-шаг с бюджетом в рублях (только с --workers 1)")
+    ap.add_argument("--merge-steps", help="выучить только кривые этих шагов (llm) и добавить их к configs/calibration.yaml; "
+                                          "остальные кривые и пороги не меняются")
     a = ap.parse_args()
     if a.fold in ("test", "holdout_category"):
         ap.error("калибровку подбираем на train/valid; test и holdout_category — только для итоговых метрик")
+    if a.llm_budget is not None and a.workers > 1:
+        ap.error("LLM — с --workers 1: бюджет считается на процесс")
 
     cfg = load_config()
+    if a.llm_budget is not None:
+        cfg = {**cfg, "llm": {**cfg["llm"], "enabled": True, "budget_rub": a.llm_budget}}
     steps = parse_steps(a.steps, list(cfg["cascade"]))
     knowledge = tuple(cfg["knowledge_folds"])
     con = duckdb.connect(str(a.db), read_only=True)
     try:
         pipeline = build_pipeline(BuildContext(con, cfg, knowledge), steps)
         pipeline.aggregator.calibrator = identity_calibrator        # учимся на сырой уверенности
-        spec = RunSpec("calibration", steps, knowledge, folds=(a.fold,), workers=a.workers)
-        rows = [r for batch, _ in predict(pipeline, iter_cards(con, spec), spec.workers) for r in batch
-                if r["value"] is not None]
+        spec = RunSpec("calibration", steps, knowledge, folds=(a.fold,), limit=a.limit, workers=a.workers)
+        rows, usage = [], None
+        for batch, u in predict(pipeline, iter_cards(con, spec), spec.workers):
+            rows += [r for r in batch if r["value"] is not None]
+            usage = u if usage is None else usage + u
         gold: dict[tuple[int, str], list[str]] = defaultdict(list)
         for sku, attr_id, value in con.execute(
                 "SELECT g.sku_id, g.attr_id, g.value FROM core_gold g JOIN core_splits s USING (sku_id) "
@@ -178,15 +188,29 @@ def main() -> None:
     data = [(r["attr_id"], r["step"], r["confidence"], any(same(r["attr_id"], r["value"], g)
                                                          for g in gold[r["sku_id"], r["attr_id"]]))
             for r in rows if (r["sku_id"], r["attr_id"]) in gold]
+    out = paths.CONFIGS / cfg["confidence"]["calibration"]
+    cost = f"; LLM: {usage.llm_calls} вызовов, {usage.llm_cost_rub:.2f} ₽" if usage and usage.llm_calls else ""
+    if a.merge_steps:
+        merge = set(parse_steps(a.merge_steps, list(cfg["cascade"])))
+        part = [row for row in data if row[1] in merge]
+        fitted = IsotonicCalibrator.fit(part, a.min_n)
+        cal = IsotonicCalibrator.load(out)
+        added = {k: c for k, c in fitted.curves.items() if "/" in k and k.split("/")[1] in merge}
+        cal.curves.update(added)
+        cal.meta[f"merged_{'_'.join(sorted(merge))}"] = {"fold": a.fold, "limit": a.limit, "n": len(part),
+                                                          "git_commit": git_commit(),
+                                                          "fitted_at": datetime.now().isoformat(timespec="seconds")}
+        cal.save(out)
+        print(f"{out}: добавлены кривые {sorted(added)} по {len(part):,} значениям{cost}")
+        return
     cal = IsotonicCalibrator.fit(data, a.min_n)
     cal.thresholds = choose_thresholds([(attr, cal(attr, step, raw), ok) for attr, step, raw, ok in data],
                                        a.target_precision, cfg["confidence"]["accept_threshold"], floor=a.floor)
     cal.meta = {"fold": a.fold, "knowledge_folds": list(knowledge), "steps": list(steps), "n": len(data),
                 "target_precision": a.target_precision, "floor": a.floor, "git_commit": git_commit(),
                 "fitted_at": datetime.now().isoformat(timespec="seconds")}
-    out = paths.CONFIGS / cfg["confidence"]["calibration"]
     cal.save(out)
-    print(f"{out}: {len(data):,} значений с эталоном, кривых {len(cal.curves)}; пороги: {cal.thresholds}")
+    print(f"{out}: {len(data):,} значений с эталоном, кривых {len(cal.curves)}; пороги: {cal.thresholds}{cost}")
 
 
 if __name__ == "__main__":

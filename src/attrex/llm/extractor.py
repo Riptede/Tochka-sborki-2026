@@ -31,7 +31,9 @@ SYSTEM = (
     "Ты извлекаешь характеристики товара из текста его карточки. Бери значение только из текста: если его там нет, "
     "верни null. Для каждого значения приведи evidence — точную цитату из текста, где оно указано. "
     "Числа возвращай числом, а единицу измерения — отдельно, как в тексте. Если даны варианты, выбери подходящий "
-    "вариант или null. Ответ — только JSON-объект по заданной схеме, без пояснений."
+    "вариант или null. Варианты найдены правилами и могут быть ошибочны: цвет узора или детали, материал "
+    "наполнителя, модель совместимого устройства — не характеристика самого товара. "
+    "Ответ — только JSON-объект по заданной схеме, без пояснений."
 )
 
 
@@ -42,12 +44,17 @@ class LlmSettings:
     max_description_chars: int = 2000
     max_options: int = 30
     score: float = 0.85
+    attrs: frozenset[str] | None = None     # None — все обязательные атрибуты схемы
+    require_candidate: bool = False         # только проверка кандидатов прошлых шагов, без поиска с нуля
+    context_chars: int = 0                  # >0: из описания — окна вокруг зацепок, а не всё описание
 
     @classmethod
     def from_config(cls, llm: dict) -> "LlmSettings":
+        attrs = llm.get("attrs")
         return cls(int(llm.get("self_consistency_samples", 3)), float(llm.get("temperature", 0.7)),
                    int(llm.get("max_description_chars", 2000)), int(llm.get("max_options", 30)),
-                   float(llm.get("score", 0.85)))
+                   float(llm.get("score", 0.85)), frozenset(attrs) if attrs else None,
+                   bool(llm.get("require_candidate", False)), int(llm.get("context_chars", 0)))
 
 
 class LlmExtractor:
@@ -79,13 +86,21 @@ class LlmExtractor:
         return self.client.drain_usage() + stats
 
     def targets(self, card: Card, schema: CategorySchema, prior: list[Candidate]) -> list[str]:
-        """Пустые и ниже порога атрибуты схемы, у которых в тексте есть зацепка."""
+        """Пустые и ниже порога атрибуты схемы, у которых в тексте есть зацепка.
+
+        llm.attrs сужает список до атрибутов, где LLM окупается; llm.require_candidate — только неуверенные значения
+        прошлых шагов: LLM выбирает из них по тексту (дёшево и без выдумки), а пустые поля не ищет.
+        """
         decisions = self.aggregator.decide(prior, schema.required)
         text = fold(f"{card.title}\n{card.description}")
         out = []
         for a in schema.required:
+            if self.settings.attrs is not None and a not in self.settings.attrs:
+                continue
             d = decisions[a]
             if not d.empty and d.confidence >= self.aggregator.threshold(a):
+                continue
+            if d.empty and self.settings.require_candidate:
                 continue
             if not d.empty or any(h in text for h in self._hooks.get(a, ())):
                 out.append(a)
@@ -107,11 +122,37 @@ class LlmExtractor:
             what = f"{a} — {spec.name_ru}" + (f", число в {spec.unit}" if spec.unit else "")
             options = self._options(a, prior)
             lines.append(what + (f"; варианты: {', '.join(options)}" if options else ""))
-        description = (card.description or "")[: self.settings.max_description_chars]
+        description = self.context(card, targets, prior)
         user = (f"Заголовок: {card.title}\nОписание: {description}\n\nХарактеристики:\n- " + "\n- ".join(lines)
                 + "\n\nДля каждой характеристики верни value и evidence (у чисел ещё unit). "
                   "Если значения в тексте нет — value и evidence null.")
         return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
+
+    def context(self, card: Card, targets: list[str], prior: list[Candidate]) -> str:
+        """Описание для промпта. С llm.context_chars — только окна вокруг цитат кандидатов и зацепок атрибутов:
+        токены промпта — главная статья расхода, а значение всё равно должно стоять рядом с зацепкой."""
+        desc, n, cap = card.description or "", self.settings.context_chars, self.settings.max_description_chars
+        if n <= 0 or len(desc) <= 3 * n:
+            return desc[:cap]
+        folded = fold(desc)
+        spans = []
+        for c in prior:
+            if c.attr_id in targets and c.source is Source.DESCRIPTION and c.evidence:
+                i = folded.find(fold(c.evidence))
+                if i >= 0:
+                    spans.append((i, i + len(c.evidence)))
+        for a in targets:
+            for h in self._hooks.get(a, ()):
+                i = folded.find(h)
+                if i >= 0:
+                    spans.append((i, i + len(h)))
+        windows: list[list[int]] = []
+        for s, e in sorted((max(0, s - n), min(len(desc), e + n)) for s, e in spans):
+            if windows and s <= windows[-1][1]:
+                windows[-1][1] = max(windows[-1][1], e)
+            else:
+                windows.append([s, e])
+        return " … ".join(desc[s:e].strip() for s, e in windows)[:cap]
 
     def _options(self, attr_id: str, prior: list[Candidate]) -> list[str]:
         if self.res.registry[attr_id].kind != "category" or attr_id == "brand":

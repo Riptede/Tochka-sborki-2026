@@ -109,6 +109,9 @@ class LlmSection(Strict):
     max_retries: Annotated[int, Field(ge=0)] = 2
     max_description_chars: Positive = 2000
     max_options: Positive = 30
+    attrs: list[str] | None = None         # каким атрибутам можно в LLM; None — всем обязательным
+    require_candidate: bool = False        # только атрибуты, где прошлые шаги нашли кандидата (LLM-проверка)
+    context_chars: Annotated[int, Field(ge=0)] = 0   # >0: из описания — окна ±N символов вокруг зацепок
     score: Share = 0.85
     cache: str | None = None
     prices_rub_per_1k: dict[str, tuple[Rub, Rub]]
