@@ -11,9 +11,13 @@ def _find_root() -> Path:
     raise RuntimeError("не найден корень репозитория (pyproject.toml)")
 
 
-def load_env(path: Path) -> list[str]:
-    """Переменные из .env (шаблон — .env.example): KEY=VALUE, # — комментарий. Уже заданные в окружении
-    и пустые значения не трогаем. Возвращает имена загруженных переменных."""
+def load_env(path: Path | None = None) -> list[str]:
+    """Переменные из .env в корне репозитория (шаблон — .env.example): KEY=VALUE, # — комментарий. Уже заданные
+    в окружении и пустые значения не трогаем. Возвращает имена загруженных переменных.
+
+    Импорт модуля окружение не меняет: .env загружают явно точки входа, которым нужен ключ API
+    (scripts/run_pipeline.py, scripts/demo.py)."""
+    path = path or ROOT / ".env"
     loaded = []
     if not path.exists():
         return loaded
@@ -30,7 +34,6 @@ def load_env(path: Path) -> list[str]:
 
 
 ROOT = _find_root()
-load_env(ROOT / ".env")
 CONFIGS = ROOT / "configs"
 DATA = ROOT / "data"
 RAW = Path(os.environ.get("ATTREX_RAW", DATA / "raw"))      # файлы организатора, только чтение

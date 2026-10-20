@@ -156,6 +156,7 @@ def main() -> None:
     ap.add_argument("--description", default="", help="описание своей карточки")
     ap.add_argument("--db", type=Path, default=OUT / "attrex.duckdb", help="БД со словарями (по умолчанию из выборки)")
     a = ap.parse_args()
+    paths.load_env()        # ключ API, если шаг LLM включён в configs/pipeline.yaml
     if a.title:
         one_card(a.db, a.title, a.description)
     else:
