@@ -194,6 +194,7 @@ def main() -> None:
     ap.add_argument("--db", type=Path, default=OUT / "attrex.duckdb", help="БД со словарями (по умолчанию из выборки)")
     ap.add_argument("--json", action="store_true", help="своя карточка: ответ в JSON — для встраивания в сервис")
     a = ap.parse_args()
+    paths.load_env()        # ключ API, если шаг LLM включён в configs/pipeline.yaml
     if a.title is not None:
         if not a.title.strip():
             ap.error("--title пустой: атрибуты извлекаются из заголовка и описания карточки")

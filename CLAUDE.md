@@ -60,7 +60,7 @@ pred_predictions, outputs/predictions.* (b4) → очередь проверки
 configs/attributes.yaml   реестр атрибутов: attr_id, тип, единица, поля фида, обязательные по категориям
 configs/pipeline.yaml     пороги, параметры LLM, разбиение
 configs/normalize.yaml    b2: ключевые слова и алиасы атрибутов, ручные синонимы, скоры правил
-src/attrex/paths.py       все пути проекта; подхватывает .env (шаблон — .env.example), окружение важнее
+src/attrex/paths.py       все пути проекта; load_env() читает .env (шаблон — .env.example) — вызывают точки входа, не импорт
 src/attrex/config.py      схемы configs/*.yaml (pydantic): новый ключ конфига — сначала сюда, иначе загрузка упадёт
 src/attrex/registry.py    загрузка реестра атрибутов
 src/attrex/contracts.py   Card, CategorySchema, Candidate, Extractor, Prediction, перечисления Step/Source/Status

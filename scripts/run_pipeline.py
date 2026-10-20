@@ -46,6 +46,7 @@ def main() -> None:
     ap.add_argument("--no-store", action="store_true", help="не писать в БД, только outputs/<run_id>/")
     ap.add_argument("--load-only", action="store_true", help="загрузить готовый outputs/<run_id>/ в БД")
     a = ap.parse_args()
+    paths.load_env()        # ключ API для шага LLM — из .env, если он не задан в окружении
 
     cfg = load_config()
     if a.load_only:
