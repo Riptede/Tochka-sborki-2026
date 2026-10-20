@@ -24,7 +24,6 @@ from attrex.normalize.text import CardText, TextField
 from attrex.normalize.title import TitleLayout
 from attrex.normalize.units import canon_model, canon_text, to_canonical_number
 
-
 # единица в знаменателе: «180 г/м2», «60 км/ч», «2 кг/шт» — другая величина; «24"/VA/1920x1080» — перечень характеристик
 _PER_UNIT = re.compile(r"\s*/\s*(?:м[23²³]?|кв|ч|час|с|сек|мин|шт|л|км|см[23²³]?)(?![\w])")
 
