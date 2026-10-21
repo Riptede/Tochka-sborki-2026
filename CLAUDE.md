@@ -83,6 +83,7 @@ tests/                    pytest
 docs/eda/                 EDA в Markdown для чтения без Jupyter: после правки ноутбука — пересобрать (docs/eda/README.md)
 docs/review_protocol.md   протокол ручной проверки для модератора
 docs/checkpoints/         материалы чекпоинтов
+docs/checkpoints/presentation_review.md   что обновить в презентации cp1 к финалу: изменения по слайдам и цифры из results/
 data/                     НЕ в git: raw/ (файлы организатора), interim/ (кэш EDA), processed/, attrex.duckdb
 outputs/                  НЕ в git: predictions и отчёты прогона
 ```
