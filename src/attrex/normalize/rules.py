@@ -132,8 +132,9 @@ class UnitNumberRule:
                          for a, kws in settings.keywords.items() if kws}
         self.anchored_units = settings.anchored_units
         k = self.k
-        self.limit_before = (re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, k.limit_words)) + r")\w*\s*[:—–-]?\s*$")
-                             if k.limit_words else None)
+        # «до» — только целое слово («дорожки», «отжим» — не границы); «максимальн*» — основа с любым окончанием
+        words = [re.escape(w[:-1]) + r"\w*" if w.endswith("*") else re.escape(w) + r"(?!\w)" for w in k.limit_words]
+        self.limit_before = (re.compile(r"(?<!\w)(?:" + "|".join(words) + r")\s*[:—–-]?\s*$") if words else None)
         self.exclude = {a: re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, words)) + r")")
                         for a, words in k.exclude_context.items() if words}
 
@@ -169,7 +170,8 @@ class UnitNumberRule:
                 if attr not in self.attr_ids or attr not in wanted or self._excluded(attr, field.folded, m):
                     continue
                 value = m.to(self.units[attr])
-                if value is not None:
+                # «0,212 г» в килограммах округляется до 0: нулевой вес или размер — не значение
+                if value is not None and float(value) > 0:
                     score = field_score(self.scores, field) * (1.0 if anchored else self.k.unanchored_factor)
                     yield _candidate(attr, value, field, score, m.start, m.end)
 

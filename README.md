@@ -188,10 +188,10 @@ uv run python scripts/make_results.py
 
 ## Результаты
 
-Итоговый прогон `20261021-0158-full-catalog` на коммите `3eb720b` (текущий `main`): весь каскад по 1,48 млн
+Итоговый прогон `20261022-2335-full-catalog` на коммите `899653f` (текущий `main`): весь каскад по 1,48 млн
 карточек, LLM выключен (0 ₽). Метрики — на отложенных частях разбиения, которые не участвовали ни в словарях,
 ни в калибровке. Подробно, с разбором — [`results/README.md`](results/README.md); файл предсказаний —
-`results/20261021-0158-full-catalog/predictions.parquet`.
+`results/20261022-2335-full-catalog/predictions.parquet`.
 
 | Часть | P | R | F1 | R_text |
 |---|---|---|---|---|
@@ -316,7 +316,7 @@ LLM-прогон — с `--workers 1`: бюджет считается на пр
 
 Замер на **test** — 4 000 карточек, которые не участвовали в подборе: `20261020-0330-llm-t4000` против того же
 каскада без LLM `20261020-0330-nollm-t4000`, отчёт
-[`results/20261021-0158-full-catalog/report_llm_test.md`](results/20261021-0158-full-catalog/report_llm_test.md):
+[`results/20261022-2335-full-catalog/report_llm_test.md`](results/20261022-2335-full-catalog/report_llm_test.md):
 
 | | P | R | F1 | F1 с весом по трафику | F1 цвета | ₽ на 1 000 карточек |
 |---|---|---|---|---|---|---|

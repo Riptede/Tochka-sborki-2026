@@ -1,7 +1,7 @@
 # Замечания к презентации: что обновить к финалу
 
 Сверка `docs/checkpoints/cp1_presentation.pdf` (продуктовый чекпоинт, 14.10, до кода) с итоговым решением.
-Цифры — из `results/20261021-0158-full-catalog/` (итоговый прогон на `main`, test + holdout_category, LLM выключен),
+Цифры — из `results/20261022-2335-full-catalog/` (итоговый прогон на `main`, test + holdout_category, LLM выключен),
 замер LLM — `report_llm_test.md`. Других цифр в презентацию не брать (CLAUDE.md, «Правила работы»).
 
 ## Что изменилось по слайдам
